@@ -1245,6 +1245,12 @@ _KNOWN_SLICEABLE_CACHE_TYPES = frozenset(
     }
 )
 
+# Minimum safety margin subtracted from the memory enforcer's hard ceiling
+# when admitting hot-tier (RAM) KV retention. Covers the transient copy
+# buffers the store path allocates between the footprint sample and the
+# retention commit (per-block GPU clones, pending-write bytes).
+_RETENTION_ADMISSION_MARGIN_BYTES = 2 * 1024**3
+
 
 _TURBOQUANT_KV_CACHE_TYPES = frozenset(
     {
@@ -4912,6 +4918,40 @@ class Scheduler:
             logger.debug("Failed to sample memory for hot-cache pressure bypass")
             return False
         return current >= self._memory_limit_bytes
+
+    def _make_retention_admission_guard(self) -> Callable[[int], bool]:
+        """Footprint-aware admission predicate for hot-tier KV retention.
+
+        The hot cache stores raw-byte copies of cached blocks in host RAM.
+        ``_current_usage_bytes()`` deliberately excludes those bytes from the
+        scheduler's soft guard metric, and the pressure bypasses only fire
+        reactively after a store has already inflated the footprint -- so a
+        store that fits the configured hot-cache budget can still push the
+        process past the memory enforcer's hard ceiling (the enforcer then
+        shrinks or destroys the hot cache and cross-turn reuse collapses into
+        full re-prefills). This guard is the predictive complement: RAM
+        retention is admitted only while the total process footprint plus the
+        projected retained bytes stays under the ceiling. It is a no-op
+        passthrough when no ceiling is known (``_memory_hard_limit_bytes``
+        unset), preserving historical behavior on hosts without enforcement.
+
+        Thread-safe: the store-cache worker thread calls this per block;
+        ``get_phys_footprint()`` is a sysctl read and the ceiling attribute
+        read is GIL-atomic.
+        """
+
+        def _admit(projected_bytes: int) -> bool:
+            ceiling = int(self._memory_hard_limit_bytes or 0)
+            if ceiling <= 0:
+                return True
+            margin = max(_RETENTION_ADMISSION_MARGIN_BYTES, ceiling // 64)
+            try:
+                footprint = get_phys_footprint()
+            except Exception:
+                return True
+            return footprint + max(0, int(projected_bytes)) <= ceiling - margin
+
+        return _admit
 
     def _clear_cache(self) -> None:
         """Clear the Metal pool and account for Qwen4 buffers that may return."""
@@ -8965,6 +9005,7 @@ class Scheduler:
                         200_000,
                     ),
                     expected_layer_cache_types=draft_layer_cache_types,
+                    retention_admission=self._make_retention_admission_guard(),
                 )
                 self._draft_paged_ssd_cache_manager = draft_ssd
                 draft_paged.set_paged_ssd_cache_manager(draft_ssd)
@@ -13512,6 +13553,7 @@ class Scheduler:
                 expected_block_size_tokens=self.config.paged_cache_block_size,
                 expected_kv_bytes_per_token=expected_kv_bytes_per_token,
                 gdn_sidecar_state_dtype=self.config.gdn_sidecar_state_dtype,
+                retention_admission=self._make_retention_admission_guard(),
             )
 
             # Connect paged SSD cache manager to PagedCacheManager

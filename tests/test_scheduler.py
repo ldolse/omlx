@@ -7296,3 +7296,33 @@ def test_unsupported_cache_skips_boundary_storage(mock_model, mock_tokenizer, ph
 def test_mock_cache_has_no_implicit_reconstruction_support(mock_model, mock_tokenizer):
     scheduler = Scheduler(mock_model, mock_tokenizer)
     assert not scheduler._cache_layer_is_reconstructible(MagicMock())
+
+
+def test_retention_admission_guard_math():
+    """_make_retention_admission_guard: passthrough without a ceiling,
+    admits under it, declines when footprint + projected would breach."""
+    from omlx.scheduler import _RETENTION_ADMISSION_MARGIN_BYTES
+
+    sched = object.__new__(Scheduler)
+
+    # No ceiling propagated -> passthrough (historical behavior).
+    sched._memory_hard_limit_bytes = 0
+    guard = sched._make_retention_admission_guard()
+    assert guard(10**12) is True
+
+    # Generous ceiling relative to the real (small) test footprint -> admit.
+    sched._memory_hard_limit_bytes = 512 * 1024**3
+    assert guard(1024) is True
+
+    # Ceiling at/below the current footprint + margin -> decline.
+    sched._memory_hard_limit_bytes = _RETENTION_ADMISSION_MARGIN_BYTES + 1024
+    assert guard(10**9) is False
+
+    # Exactly at the boundary (footprint + projected == ceiling - margin)
+    # -> admit.
+    from omlx.utils.proc_memory import get_phys_footprint
+
+    sched._memory_hard_limit_bytes = (
+        get_phys_footprint() + 4096 + _RETENTION_ADMISSION_MARGIN_BYTES
+    )
+    assert guard(4096) is True
