@@ -8989,6 +8989,9 @@ class Scheduler:
                 self._draft_prefix_cache.set_cold_restore_callback(
                     self._restore_block_from_cold
                 )
+                draft_ssd.set_eviction_depth_provider(
+                    self._draft_prefix_cache.get_chain_depths
+                )
                 logger.info(
                     f"SpecPrefill: draft model set with SSD cache (model_name={name})"
                 )
@@ -13537,6 +13540,11 @@ class Scheduler:
             if self.block_aware_cache is not None:
                 self.block_aware_cache.set_paged_ssd_cache_manager(
                     self.paged_ssd_cache_manager
+                )
+                # Chain-aware SSD eviction: never let the LRU head pick kill
+                # a stored chain's root blocks (see get_chain_depths).
+                self.paged_ssd_cache_manager.set_eviction_depth_provider(
+                    self.block_aware_cache.get_chain_depths
                 )
 
             # Initialize boundary snapshot SSD store for offloading

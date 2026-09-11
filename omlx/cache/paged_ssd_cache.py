@@ -31,7 +31,7 @@ import time
 from collections import OrderedDict
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 import numpy as np
 
@@ -160,6 +160,12 @@ _MAX_PENDING_WRITES = _compute_max_pending_writes()
 # subsequent saves drain the remainder; bounds per-call latency at the
 # cost of taking multiple saves to fully reconverge.
 _MAX_INLINE_UNLINKS_PER_SAVE = 32
+
+# Per-index candidate pool size for depth-aware eviction: the eviction
+# choice considers the LRU head (classic victim) plus this many MRU-tail
+# entries, so a chain's deepest (tip) block is reachable as a victim even
+# when it is the most recently touched entry of a saturated cache.
+_EVICTION_CANDIDATE_POOL = 24
 
 
 # Cache format version. Bump when on-disk layout or RotatingKVCache meta_state
@@ -1156,19 +1162,28 @@ class PagedSSDCacheIndex:
                 self._lru.move_to_end(block_hash)
                 self._lru[block_hash] = self._index[block_hash].last_access
 
-    def get_lru_entries(self, count: int) -> list[PagedSSDBlockMetadata]:
+    def get_lru_entries(
+        self, count: int, newest: bool = False
+    ) -> list[PagedSSDBlockMetadata]:
         """
         Get least recently used entries.
 
         Args:
             count: Maximum number of entries to return.
+            newest: When True, return the most recently used entries
+                (tail of the LRU) instead of the head.
 
         Returns:
             List of LRU metadata entries.
         """
         with self._lock:
+            keys = (
+                list(self._lru.keys())[-count:][::-1]
+                if newest
+                else list(self._lru.keys())[:count]
+            )
             result = []
-            for block_hash in list(self._lru.keys())[:count]:
+            for block_hash in keys:
                 if block_hash in self._index:
                     result.append(self._index[block_hash])
             return result
@@ -1660,6 +1675,7 @@ class PagedSSDCacheManager(CacheManager):
         """
         self._cache_dir = cache_dir
         self._max_size = max_size_bytes
+        self._eviction_depth_provider: Callable[[], dict[bytes, int]] | None = None
         self._index = PagedSSDCacheIndex(max_size_bytes)
         self._incompatible_index = PagedSSDCacheIndex(max_size_bytes)
         # Durable GDN checkpoints are kept in a separate namespace and never
@@ -4518,6 +4534,34 @@ class PagedSSDCacheManager(CacheManager):
         disk_limit = int(disk_available * self._DISK_SAFE_RATIO)
         return min(self._max_size, disk_limit)
 
+    def set_eviction_depth_provider(
+        self, provider: Callable[[], dict[bytes, int]] | None
+    ) -> None:
+        """Install/replace the chain-depth provider used by SSD eviction.
+
+        The provider maps block hash -> position (depth) within its stored
+        chain (0 = root). Eviction prefers the deepest blocks: removing an
+        interior/root block truncates prefix matching at that depth (the
+        root kills the whole chain), while removing the tip only sheds the
+        newest block. ``None`` (default) restores pure LRU. Thread-safe:
+        a single attribute reference swap (GIL-atomic).
+        """
+        self._eviction_depth_provider = provider
+
+    def _eviction_depths(self) -> dict[bytes, int] | None:
+        """Snapshot the chain-depth map, failing open to None (pure LRU)."""
+        provider = self._eviction_depth_provider
+        if provider is None:
+            return None
+        try:
+            return provider()
+        except Exception:
+            logger.debug(
+                "Eviction depth provider raised; falling back to LRU",
+                exc_info=True,
+            )
+            return None
+
     def _evict_tracked_until_size(
         self,
         target_size: int,
@@ -4532,6 +4576,7 @@ class PagedSSDCacheManager(CacheManager):
         avoiding a second, competing budget for GDN history.
         """
         evicted: list[tuple[Any, Any]] = []
+        depths = self._eviction_depths()
 
         while self._tracked_ssd_size() > target_size:
             if max_count is not None and len(evicted) >= max_count:
@@ -4540,6 +4585,9 @@ class PagedSSDCacheManager(CacheManager):
             compatible = self._index.get_lru_entries(1)
             incompatible = self._incompatible_index.get_lru_entries(1)
             sidecars = self._gdn_sidecar_index.get_lru_entries(1)
+            compatible_newest = self._index.get_lru_entries(
+                _EVICTION_CANDIDATE_POOL, newest=True
+            )
             candidates: list[tuple[float, int, Any, Any]] = []
             if compatible:
                 candidates.append((compatible[0].last_access, 0, self._index, compatible[0]))
@@ -4551,12 +4599,35 @@ class PagedSSDCacheManager(CacheManager):
                 candidates.append(
                     (sidecars[0].last_access, 2, self._gdn_sidecar_index, sidecars[0])
                 )
+            for metadata in compatible_newest:
+                # Depth-aware pool: the LRU tail holds the most recently
+                # touched blocks, which pure LRU can never select. Under a
+                # saturated single-chain cache every entry shares the same
+                # last_access (one restore touches the whole chain), so the
+                # head pick is insertion order -- the chain ROOT -- and the
+                # cache self-destructs one root kill at a time. Offering the
+                # tail as candidates lets the depth preference below shed
+                # the chain tip instead.
+                candidates.append(
+                    (metadata.last_access, 0, self._index, metadata)
+                )
             if not candidates:
                 break
 
-            _, _, source_index, candidate = min(
-                candidates, key=lambda item: (item[0], item[1])
-            )
+            def _victim_key(item: tuple[float, int, Any, Any]) -> tuple:
+                last_access, kind, _, metadata = item
+                depth = (
+                    depths.get(metadata.block_hash)
+                    if depths is not None and kind == 0
+                    else None
+                )
+                if depth is None:
+                    # Untracked (or sidecar/incompatible): classic LRU
+                    # semantics, evicted before tracked chain members.
+                    return (0, 0, last_access, kind)
+                return (1, -depth, last_access, kind)
+
+            _, _, source_index, candidate = min(candidates, key=_victim_key)
             if source_index is self._gdn_sidecar_index:
                 metadata = source_index.remove_key(candidate.key)
             else:

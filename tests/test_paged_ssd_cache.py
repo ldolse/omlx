@@ -4498,3 +4498,100 @@ class TestTurboquantBitsSignature:
             assert payload["turboquant_kv_bits"] == 6.0
         finally:
             mgr.close()
+
+
+class TestEvictionDepthPreference:
+    """Chain-depth-aware SSD eviction.
+
+    Under a saturated single-chain cache every block shares the same
+    last_access (one restore touches the whole chain), so pure LRU picks
+    the insertion-order head -- the chain ROOT -- and prefix matching
+    collapses to zero. With a depth provider installed, eviction sheds the
+    deepest (tip) blocks instead.
+    """
+
+    @staticmethod
+    def _metadata(block_hash: bytes, last_access: float, size: int = 1000):
+        return PagedSSDBlockMetadata(
+            block_hash=block_hash,
+            file_path=Path(f"/tmp/ssd-test/{block_hash.hex()[:16]}.safetensors"),
+            file_size=size,
+            token_count=2048,
+            created_at=last_access,
+            last_access=last_access,
+            num_layers=2,
+            model_name="test-model",
+        )
+
+    def _make_manager(self, tmp_path, provider):
+        mgr = PagedSSDCacheManager(
+            cache_dir=tmp_path / "depth_evict",
+            max_size_bytes=100 * 1024**3,
+        )
+        mgr.set_eviction_depth_provider(provider)
+        return mgr
+
+    def test_eviction_sheds_tip_not_root(self, tmp_path):
+        hashes = [f"chain_root_{i}".encode() for i in range(4)]
+        depths = {h: i for i, h in enumerate(hashes)}
+        mgr = self._make_manager(tmp_path, lambda: depths)
+        try:
+            for h in hashes:
+                mgr._index.add(self._metadata(h, 1000.0))
+            # Force eviction of one block.
+            evicted = mgr._evict_tracked_until_size(3 * 1000)
+            assert len(evicted) == 1
+            assert evicted[0][1].block_hash == hashes[-1]
+            assert mgr._index.get(hashes[0]) is not None
+            # Repeated evictions peel from the tip inward.
+            mgr._evict_tracked_until_size(2 * 1000)
+            mgr._evict_tracked_until_size(1 * 1000)
+            assert mgr._index.get(hashes[0]) is not None
+            assert mgr._index.get(hashes[1]) is None
+            # Fail-open: when only the root remains it is evictable.
+            mgr._evict_tracked_until_size(0)
+            assert mgr._index.get(hashes[0]) is None
+        finally:
+            mgr.close()
+
+    def test_untracked_evicted_before_tracked(self, tmp_path):
+        tracked = b"tracked_chain_block"
+        untracked = b"untracked_block"
+        mgr = self._make_manager(tmp_path, lambda: {tracked: 5})
+        try:
+            mgr._index.add(self._metadata(untracked, 900.0))
+            mgr._index.add(self._metadata(tracked, 901.0))
+            evicted = mgr._evict_tracked_until_size(1000)
+            assert [m.block_hash for _, m in evicted] == [untracked]
+            assert mgr._index.get(tracked) is not None
+        finally:
+            mgr.close()
+
+    def test_provider_exception_falls_back_to_lru(self, tmp_path):
+        def bad_provider():
+            raise RuntimeError("boom")
+
+        hashes = [b"lru_head_block", b"lru_tail_block"]
+        mgr = self._make_manager(tmp_path, bad_provider)
+        try:
+            mgr._index.add(self._metadata(hashes[0], 500.0))
+            mgr._index.add(self._metadata(hashes[1], 600.0))
+            evicted = mgr._evict_tracked_until_size(1000)
+            assert [m.block_hash for _, m in evicted] == [hashes[0]]
+        finally:
+            mgr.close()
+
+    def test_get_lru_entries_newest(self):
+        index = PagedSSDCacheIndex(1024**3)
+        hashes = [f"newest_probe_{i}".encode() for i in range(3)]
+        for h in hashes:
+            index.add(self._metadata(h, 100.0))
+        try:
+            assert [m.block_hash for m in index.get_lru_entries(2)] == hashes[:2]
+            assert [
+                m.block_hash for m in index.get_lru_entries(2, newest=True)
+            ] == hashes[:0:-1]
+        finally:
+            index.remove(hashes[0])
+            index.remove(hashes[1])
+            index.remove(hashes[2])

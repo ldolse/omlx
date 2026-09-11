@@ -4808,6 +4808,28 @@ class BlockAwarePrefixCache(CacheManager):
                 i + 1,
             )
 
+    def get_chain_depths(self) -> dict[bytes, int]:
+        """Map each registered block hash to its depth within its chain.
+
+        Depth 0 is the chain root; the tip has the largest depth. Consumed
+        by the SSD tier's depth-aware eviction: evicting a deep block only
+        sheds the newest tokens, while evicting a shallow block truncates
+        prefix matching at that depth -- and evicting the root (depth 0)
+        discards every downstream block of the chain, collapsing reuse to
+        zero. Blocks absent from the returned map are treated as untracked
+        by the SSD tier (classic LRU).
+        """
+        depths: dict[bytes, int] = {}
+        allocated_blocks = self.paged_cache.allocated_blocks
+        for entry in self._prefix_index.values():
+            block_ids = entry[1]
+            for depth, block_id in enumerate(block_ids):
+                block = allocated_blocks.get(block_id)
+                if block is None or block.block_hash is None:
+                    continue
+                depths[bytes(block.block_hash)] = depth
+        return depths
+
     def _on_block_hash_dropped(self, block_hash: bytes) -> None:
         """Drop the prefix-index entry for a dead block-hash association.
 
