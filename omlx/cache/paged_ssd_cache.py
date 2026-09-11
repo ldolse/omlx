@@ -161,10 +161,10 @@ _MAX_PENDING_WRITES = _compute_max_pending_writes()
 # cost of taking multiple saves to fully reconverge.
 _MAX_INLINE_UNLINKS_PER_SAVE = 32
 
-# Per-index candidate pool size for depth-aware eviction: the eviction
-# choice considers the LRU head (classic victim) plus this many MRU-tail
-# entries, so a chain's deepest (tip) block is reachable as a victim even
-# when it is the most recently touched entry of a saturated cache.
+# How many of the newest (most-recently-used) entries per index join the
+# eviction candidate pool alongside the classic LRU head. We want to
+# to evict is the most recently touched entry. Bounded to
+# keep the per-save candidate scan cheap.
 _EVICTION_CANDIDATE_POOL = 24
 
 
