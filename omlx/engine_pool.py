@@ -18,6 +18,7 @@ import copy
 import gc
 import json
 import logging
+import os
 import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -363,8 +364,13 @@ class EnginePool:
         qwen4_offload, _, qwen4_estimate = self._qwen4_ple_offload_status(
             entry, runtime_settings
         )
-        if qwen4_offload and qwen4_estimate is not None:
-            base = min(base, qwen4_estimate.mmap_bytes)
+        if qwen4_estimate is not None:
+            base = min(
+                base,
+                qwen4_estimate.mmap_bytes
+                if qwen4_offload
+                else qwen4_estimate.resident_bytes,
+            )
         v41_offload, _, v41_estimate = self._deepseek_v41_engram_offload_status(
             entry, runtime_settings
         )
@@ -408,6 +414,26 @@ class EnginePool:
                 shared_fraction=runtime_settings.qwen35_ane_prefill_shared_fraction,
                 width=runtime_settings.qwen35_ane_prefill_sequence_length,
             )
+        if getattr(runtime_settings, "moe_expert_offload_enabled", False):
+            from .patches.moe_expert_offload import estimate_offload_admission_bytes
+
+            fraction = runtime_settings.moe_expert_offload_resident_fraction
+            if entry.config_model_type == "deepseek_v41":
+                if (
+                    v41_estimate is None
+                    and os.environ.get("OMLX_MOE_EXPERT_OFFLOAD", "1") != "0"
+                ):
+                    from .patches.deepseek_v41.moe_offload import (
+                        estimate_expert_savings,
+                    )
+
+                    base = max(
+                        0, base - estimate_expert_savings(entry.model_path, fraction)
+                    )
+            elif qwen4_estimate is None:
+                base = estimate_offload_admission_bytes(
+                    entry.model_path, base, fraction
+                )
         return base + extra
 
     def _qwen4_ple_offload_status(
@@ -428,6 +454,23 @@ class EnginePool:
             )
 
             estimate = qwen4_exp_residency_estimate(entry.model_path)
+            if getattr(settings, "moe_expert_offload_enabled", False):
+                from .patches.moe_expert_offload import estimate_offload_admission_bytes
+
+                fraction = settings.moe_expert_offload_resident_fraction
+                # Price expert residency before deciding whether PLE must use SSD.
+                # The entry projection consumes these adjusted estimates once.
+                saved = estimate.checkpoint_bytes - estimate_offload_admission_bytes(
+                    entry.model_path, estimate.checkpoint_bytes, fraction
+                )
+                # PLE estimates include a 5% allowance on checkpoint bytes;
+                # offloaded expert bytes must release the same allowance.
+                saved = int(saved * 1.05)
+                estimate = replace(
+                    estimate,
+                    resident_bytes=max(0, estimate.resident_bytes - saved),
+                    mmap_bytes=max(0, estimate.mmap_bytes - saved),
+                )
         except (OSError, TypeError, ValueError):
             logger.debug(
                 "Could not inspect Qwen4-Exp PLE residency for %s",
@@ -498,6 +541,22 @@ class EnginePool:
             )
 
             estimate = deepseek_v41_residency_estimate(entry.model_path)
+            if not estimate.supported:
+                return False, False, None
+            if (
+                getattr(settings, "moe_expert_offload_enabled", False)
+                and os.environ.get("OMLX_MOE_EXPERT_OFFLOAD", "1") != "0"
+            ):
+                from .patches.deepseek_v41.moe_offload import estimate_expert_savings
+
+                saved = estimate_expert_savings(
+                    entry.model_path, settings.moe_expert_offload_resident_fraction
+                )
+                estimate = replace(
+                    estimate,
+                    resident_bytes=max(0, estimate.resident_bytes - int(saved * 1.05)),
+                    mmap_bytes=max(0, estimate.mmap_bytes - int(saved * 1.05)),
+                )
         except (KeyError, OSError, TypeError, ValueError):
             logger.debug(
                 "Could not inspect DeepSeek V4.1 Engram residency for %s",
@@ -831,6 +890,14 @@ class EnginePool:
                     "qwen35_ane_prefill_cpu_shared_resource",
                     data.get("qwen35_ane_prefill_cpu_shared_resource", True),
                 )
+
+        moe_offload_active = bool(data.get("moe_expert_offload_enabled", False))
+        add("moe_expert_offload_enabled", moe_offload_active)
+        if moe_offload_active:
+            add(
+                "moe_expert_offload_resident_fraction",
+                data.get("moe_expert_offload_resident_fraction", 0.25),
+            )
 
         specprefill_active = bool(data.get("specprefill_enabled", False)) and has_value(
             "specprefill_draft_model"
@@ -1788,6 +1855,7 @@ class EnginePool:
                 base_size=admission_size,
             )
             admission_kind = "local shard" if deployment is not None else "model"
+
             ceiling = self._current_ceiling()
             best_effort = False
             if ceiling <= 0:
