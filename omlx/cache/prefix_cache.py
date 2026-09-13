@@ -4808,27 +4808,38 @@ class BlockAwarePrefixCache(CacheManager):
                 i + 1,
             )
 
-    def get_chain_depths(self) -> dict[bytes, int]:
-        """Map each registered block hash to its depth within its chain.
+    def get_chain_eviction_groups(self) -> dict[bytes, tuple[bytes, int]]:
+        """Map each registered block hash to (chain key, depth).
 
-        Depth 0 is the chain root; the tip has the largest depth. Consumed
-        by the SSD tier's depth-aware eviction: evicting a deep block only
-        sheds the newest tokens, while evicting a shallow block truncates
-        prefix matching at that depth -- and evicting the root (depth 0)
-        discards every downstream block of the chain, collapsing reuse to
-        zero. Blocks absent from the returned map are treated as untracked
-        by the SSD tier (classic LRU).
+        Depth is the block's position within its chain (0 = root); the tip
+        has the largest depth. The chain key is the index hash of the
+        longest registered chain containing the block, so every block of
+        one stored sequence maps to the same key and the SSD tier can
+        evaluate recency per chain: a single restore touches all of a
+        chain's blocks in one burst, and per-block recency cannot
+        distinguish them there. Shared-prefix blocks resolve to the
+        longest chain they are registered under, which attaches them to
+        the live session rather than a dormant one. Blocks absent from
+        the returned map are treated as untracked by the SSD tier
+        (classic LRU).
         """
-        depths: dict[bytes, int] = {}
+        best: dict[bytes, tuple[int, bytes, int]] = {}
         allocated_blocks = self.paged_cache.allocated_blocks
-        for entry in self._prefix_index.values():
+        for key_hash, entry in self._prefix_index.items():
             block_ids = entry[1]
+            chain_len = entry[2]
             for depth, block_id in enumerate(block_ids):
                 block = allocated_blocks.get(block_id)
                 if block is None or block.block_hash is None:
                     continue
-                depths[bytes(block.block_hash)] = depth
-        return depths
+                block_hash = bytes(block.block_hash)
+                prev = best.get(block_hash)
+                if prev is None or chain_len > prev[0]:
+                    best[block_hash] = (chain_len, key_hash, depth)
+        return {
+            block_hash: (chain_key, depth)
+            for block_hash, (_, chain_key, depth) in best.items()
+        }
 
     def _on_block_hash_dropped(self, block_hash: bytes) -> None:
         """Drop the prefix-index entry for a dead block-hash association.

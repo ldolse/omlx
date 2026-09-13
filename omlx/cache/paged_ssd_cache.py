@@ -1188,6 +1188,18 @@ class PagedSSDCacheIndex:
                     result.append(self._index[block_hash])
             return result
 
+    def get_all_entries(self) -> list[PagedSSDBlockMetadata]:
+        """
+        Snapshot of every indexed entry.
+
+        Used by chain-aware eviction, which must consider each chain's
+        deepest member as a victim candidate; a dormant chain's tip is
+        neither the LRU head nor part of the newest tail, so a head/pool
+        sample cannot represent it.
+        """
+        with self._lock:
+            return list(self._index.values())
+
     def evict_until_size(
         self,
         target_size: int,
@@ -4535,21 +4547,24 @@ class PagedSSDCacheManager(CacheManager):
         return min(self._max_size, disk_limit)
 
     def set_eviction_depth_provider(
-        self, provider: Callable[[], dict[bytes, int]] | None
+        self, provider: Callable[[], dict[bytes, tuple[bytes, int]]] | None
     ) -> None:
-        """Install/replace the chain-depth provider used by SSD eviction.
+        """Install/replace the chain-group provider used by SSD eviction.
 
-        The provider maps block hash -> position (depth) within its stored
-        chain (0 = root). Eviction prefers the deepest blocks: removing an
-        interior/root block truncates prefix matching at that depth (the
-        root kills the whole chain), while removing the tip only sheds the
-        newest block. ``None`` (default) restores pure LRU. Thread-safe:
-        a single attribute reference swap (GIL-atomic).
+        The provider maps block hash -> (chain key, depth) where depth is
+        the block's position within its stored chain (0 = root) and the
+        chain key identifies the longest registered chain containing the
+        block. Eviction sheds the least recently used chain first and,
+        within that chain, the deepest block: removing an interior/root
+        block truncates prefix matching at that depth (the root kills the
+        whole chain), while removing the tip only sheds the newest block.
+        ``None`` (default) restores pure LRU. Thread-safe: a single
+        attribute reference swap (GIL-atomic).
         """
         self._eviction_depth_provider = provider
 
-    def _eviction_depths(self) -> dict[bytes, int] | None:
-        """Snapshot the chain-depth map, failing open to None (pure LRU)."""
+    def _eviction_groups(self) -> dict[bytes, tuple[bytes, int]] | None:
+        """Snapshot the chain-group map, failing open to None (pure LRU)."""
         provider = self._eviction_depth_provider
         if provider is None:
             return None
@@ -4557,7 +4572,7 @@ class PagedSSDCacheManager(CacheManager):
             return provider()
         except Exception:
             logger.debug(
-                "Eviction depth provider raised; falling back to LRU",
+                "Eviction chain-group provider raised; falling back to LRU",
                 exc_info=True,
             )
             return None
@@ -4567,65 +4582,116 @@ class PagedSSDCacheManager(CacheManager):
         target_size: int,
         max_count: int | None = None,
     ) -> list[tuple[Any, Any]]:
-        """Remove globally oldest tracked main or sidecar files.
+        """Remove tracked main or sidecar files under cache pressure.
 
-        Main compatible blocks, incompatible blocks, and GDN sidecars share a
-        single deterministic LRU walk.  Equal timestamps are resolved in the
-        fixed order compatible, incompatible, sidecar, then by the index's
-        stable key ordering.  This keeps the configured SSD limit safe while
-        avoiding a second, competing budget for GDN history.
+        With a chain-group provider installed, victims are chosen at chain
+        granularity: the least recently used chain sheds first, and within
+        that chain the deepest (tip) block goes first. Recency must be
+        evaluated per chain because a single restore touches every block
+        of the active chain in one burst -- per-block recency cannot
+        distinguish them, and a per-block deepest-first rule would shed
+        the active chain's own tip (its chain is always the globally
+        deepest) while dormant chains survive. Evicting a chain tip only
+        sheds the newest tokens; evicting an interior/root block truncates
+        prefix matching there and strands the deeper blocks as dead
+        weight.
+
+        Without a provider, main compatible blocks, incompatible blocks,
+        and GDN sidecars share a single deterministic LRU walk over the
+        LRU heads plus the newest tail.  Equal timestamps are resolved in
+        the fixed order compatible, incompatible, sidecar, then by the
+        index's stable key ordering.  This keeps the configured SSD limit
+        safe while avoiding a second, competing budget for GDN history.
         """
         evicted: list[tuple[Any, Any]] = []
-        depths = self._eviction_depths()
+        groups = self._eviction_groups()
 
         while self._tracked_ssd_size() > target_size:
             if max_count is not None and len(evicted) >= max_count:
                 break
 
-            compatible = self._index.get_lru_entries(1)
-            incompatible = self._incompatible_index.get_lru_entries(1)
-            sidecars = self._gdn_sidecar_index.get_lru_entries(1)
-            compatible_newest = self._index.get_lru_entries(
-                _EVICTION_CANDIDATE_POOL, newest=True
-            )
             candidates: list[tuple[float, int, Any, Any]] = []
-            if compatible:
-                candidates.append((compatible[0].last_access, 0, self._index, compatible[0]))
-            if incompatible:
-                candidates.append(
-                    (incompatible[0].last_access, 1, self._incompatible_index, incompatible[0])
+            chain_ts: dict[bytes, float] = {}
+            if groups is not None:
+                # Chain-aware selection: scan the whole compatible index
+                # so every chain's deepest member is available as a victim
+                # candidate. The LRU head + newest-tail pool below cannot
+                # represent a dormant chain's tip (all of its members are
+                # old), and shedding such a chain root-first would strand
+                # its remaining blocks as unmatchable dead weight.
+                incompatible = self._incompatible_index.get_lru_entries(1)
+                if incompatible:
+                    candidates.append(
+                        (
+                            incompatible[0].last_access,
+                            1,
+                            self._incompatible_index,
+                            incompatible[0],
+                        )
+                    )
+                sidecars = self._gdn_sidecar_index.get_lru_entries(1)
+                if sidecars:
+                    candidates.append(
+                        (sidecars[0].last_access, 2, self._gdn_sidecar_index, sidecars[0])
+                    )
+                for metadata in self._index.get_all_entries():
+                    candidates.append((metadata.last_access, 0, self._index, metadata))
+                    group = groups.get(metadata.block_hash)
+                    if group is None:
+                        continue
+                    chain_key = group[0]
+                    ts = chain_ts.get(chain_key)
+                    if ts is None or metadata.last_access > ts:
+                        chain_ts[chain_key] = metadata.last_access
+            else:
+                compatible = self._index.get_lru_entries(1)
+                incompatible = self._incompatible_index.get_lru_entries(1)
+                sidecars = self._gdn_sidecar_index.get_lru_entries(1)
+                compatible_newest = self._index.get_lru_entries(
+                    _EVICTION_CANDIDATE_POOL, newest=True
                 )
-            if sidecars:
-                candidates.append(
-                    (sidecars[0].last_access, 2, self._gdn_sidecar_index, sidecars[0])
-                )
-            for metadata in compatible_newest:
-                # Depth-aware pool: the LRU tail holds the most recently
-                # touched blocks, which pure LRU can never select. Under a
-                # saturated single-chain cache every entry shares the same
-                # last_access (one restore touches the whole chain), so the
-                # head pick is insertion order -- the chain ROOT -- and the
-                # cache self-destructs one root kill at a time. Offering the
-                # tail as candidates lets the depth preference below shed
-                # the chain tip instead.
-                candidates.append(
-                    (metadata.last_access, 0, self._index, metadata)
-                )
+                if compatible:
+                    candidates.append((compatible[0].last_access, 0, self._index, compatible[0]))
+                if incompatible:
+                    candidates.append(
+                        (incompatible[0].last_access, 1, self._incompatible_index, incompatible[0])
+                    )
+                if sidecars:
+                    candidates.append(
+                        (sidecars[0].last_access, 2, self._gdn_sidecar_index, sidecars[0])
+                    )
+                for metadata in compatible_newest:
+                    # The LRU tail holds the most recently touched blocks,
+                    # which pure LRU can never select. Under a saturated
+                    # single-chain cache every entry shares the same
+                    # last_access (one restore touches the whole chain), so
+                    # the head pick is insertion order -- the chain ROOT.
+                    candidates.append(
+                        (metadata.last_access, 0, self._index, metadata)
+                    )
             if not candidates:
                 break
 
             def _victim_key(item: tuple[float, int, Any, Any]) -> tuple:
                 last_access, kind, _, metadata = item
-                depth = (
-                    depths.get(metadata.block_hash)
-                    if depths is not None and kind == 0
+                group = (
+                    groups.get(metadata.block_hash)
+                    if groups is not None and kind == 0
                     else None
                 )
-                if depth is None:
-                    # Untracked (or sidecar/incompatible): classic LRU
-                    # semantics, evicted before tracked chain members.
+                if group is None:
+                    # Untracked (or sidecar/incompatible, or no provider):
+                    # classic LRU semantics, evicted before tracked chain
+                    # members.
                     return (0, 0, last_access, kind)
-                return (1, -depth, last_access, kind)
+                chain_key, depth = group
+                return (
+                    1,
+                    chain_ts.get(chain_key, last_access),
+                    -depth,
+                    last_access,
+                    kind,
+                )
 
             _, _, source_index, candidate = min(candidates, key=_victim_key)
             if source_index is self._gdn_sidecar_index:

@@ -4501,13 +4501,17 @@ class TestTurboquantBitsSignature:
 
 
 class TestEvictionDepthPreference:
-    """Chain-depth-aware SSD eviction.
+    """Chain-aware SSD eviction.
 
     Under a saturated single-chain cache every block shares the same
     last_access (one restore touches the whole chain), so pure LRU picks
     the insertion-order head -- the chain ROOT -- and prefix matching
-    collapses to zero. With a depth provider installed, eviction sheds the
-    deepest (tip) blocks instead.
+    collapses to zero. With a chain-group provider installed, eviction
+    sheds the least recently used chain first and, within that chain, the
+    deepest (tip) block. Per-block recency is deliberately NOT the
+    primary key: the active chain is always the globally deepest one, so
+    a deepest-first rule would shed its fresh tip while dormant chains
+    survive.
     """
 
     @staticmethod
@@ -4533,7 +4537,7 @@ class TestEvictionDepthPreference:
 
     def test_eviction_sheds_tip_not_root(self, tmp_path):
         hashes = [f"chain_root_{i}".encode() for i in range(4)]
-        depths = {h: i for i, h in enumerate(hashes)}
+        depths = {h: (b"chain_a", i) for i, h in enumerate(hashes)}
         mgr = self._make_manager(tmp_path, lambda: depths)
         try:
             for h in hashes:
@@ -4557,13 +4561,42 @@ class TestEvictionDepthPreference:
     def test_untracked_evicted_before_tracked(self, tmp_path):
         tracked = b"tracked_chain_block"
         untracked = b"untracked_block"
-        mgr = self._make_manager(tmp_path, lambda: {tracked: 5})
+        mgr = self._make_manager(tmp_path, lambda: {tracked: (b"chain_a", 5)})
         try:
             mgr._index.add(self._metadata(untracked, 900.0))
             mgr._index.add(self._metadata(tracked, 901.0))
             evicted = mgr._evict_tracked_until_size(1000)
             assert [m.block_hash for _, m in evicted] == [untracked]
             assert mgr._index.get(tracked) is not None
+        finally:
+            mgr.close()
+
+    def test_active_chain_survives_over_dormant_chain(self, tmp_path):
+        # The active chain was restored recently (fresh last_access); the
+        # dormant chain is old. Even though both chains have identical
+        # depths, the dormant chain sheds first -- tip-first, root last --
+        # and the active chain is untouched until the dormant one is gone.
+        active = [f"active_{i}".encode() for i in range(3)]
+        dormant = [f"dormant_{i}".encode() for i in range(3)]
+        groups = {
+            h: (b"chain_active", i) for i, h in enumerate(active)
+        }
+        groups.update({h: (b"chain_dormant", i) for i, h in enumerate(dormant)})
+        mgr = self._make_manager(tmp_path, lambda: groups)
+        try:
+            for h in dormant:
+                mgr._index.add(self._metadata(h, 500.0))
+            for h in active:
+                mgr._index.add(self._metadata(h, 2000.0))
+            # Shed the dormant chain completely, tip-first.
+            evicted = mgr._evict_tracked_until_size(3 * 1000)
+            assert [m.block_hash for _, m in evicted] == list(reversed(dormant))
+            assert all(mgr._index.get(h) is not None for h in active)
+            assert mgr._index.get(dormant[0]) is None
+            # Only now does the active chain start shedding, from its tip.
+            evicted = mgr._evict_tracked_until_size(2 * 1000)
+            assert [m.block_hash for _, m in evicted] == [active[-1]]
+            assert mgr._index.get(active[0]) is not None
         finally:
             mgr.close()
 
