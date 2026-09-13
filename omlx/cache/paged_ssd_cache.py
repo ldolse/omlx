@@ -1632,6 +1632,7 @@ class PagedSSDCacheManager(CacheManager):
         expected_layer_cache_types: list[str] | None = None,
         gdn_ssd_split_enabled: bool = False,
         gdn_sidecar_state_dtype: str = "fp32",
+        retention_admission: Callable[[int], bool] | None = None,
     ):
         """
         Initialize the SSD cache manager.
@@ -1684,10 +1685,21 @@ class PagedSSDCacheManager(CacheManager):
                 payload layout and enable the durable-sidecar profile. The
                 file/index API itself remains available only in SSD-backed
                 mode; split blocks use format version 5.
+            retention_admission: Optional predicate consulted before retaining
+                block data in the hot cache (RAM). Receives the projected
+                retained byte count and returns True when retention is allowed.
+                When it returns False, SSD-backed managers fall back to
+                write-through persistence and hot_cache_only managers skip
+                retention entirely (the store rolls back that block). Used to
+                keep the hot tier inside the process memory ceiling; None
+                (default) retains unconditionally.
         """
         self._cache_dir = cache_dir
         self._max_size = max_size_bytes
-        self._eviction_depth_provider: Callable[[], dict[bytes, int]] | None = None
+        self._eviction_depth_provider: (
+            Callable[[], dict[bytes, tuple[bytes, int]]] | None
+        ) = None
+        self._retention_admission = retention_admission
         self._index = PagedSSDCacheIndex(max_size_bytes)
         self._incompatible_index = PagedSSDCacheIndex(max_size_bytes)
         # Durable GDN checkpoints are kept in a separate namespace and never
@@ -1759,6 +1771,7 @@ class PagedSSDCacheManager(CacheManager):
             "preload_time_ms": 0.0,
             "ssd_write_drops": 0,
             "ssd_inline_write_fallbacks": 0,
+            "retention_declines": 0,
         }
 
         # --- Hot cache (in-memory raw-bytes tier) ---
@@ -1841,6 +1854,62 @@ class PagedSSDCacheManager(CacheManager):
         )
 
     # --- Hot cache helpers ---
+
+    def set_retention_admission(
+        self, admission: Callable[[int], bool] | None
+    ) -> None:
+        """Install/replace the hot-tier RAM retention admission predicate.
+
+        See the ``retention_admission`` constructor argument. Installing it
+        after construction is supported because the memory ceiling it guards
+        (the process memory enforcer's hard limit) is propagated to owners
+        at runtime, after the cache manager is built. Thread-safe: a single
+        attribute reference swap (GIL-atomic).
+        """
+        self._retention_admission = admission
+
+    def _retention_admit(self, projected_bytes: int) -> bool:
+        """Return True when retaining ``projected_bytes`` of block data in
+        the hot cache is allowed by the installed admission predicate.
+
+        Fail-open: an absent or raising predicate preserves the historical
+        unconditional-retention behavior.
+        """
+        admission = self._retention_admission
+        if admission is None:
+            return True
+        try:
+            return bool(admission(max(0, int(projected_bytes))))
+        except Exception:
+            logger.debug(
+                "Retention admission predicate raised; allowing retention",
+                exc_info=True,
+            )
+            return True
+
+    @staticmethod
+    def _estimate_cache_data_bytes(cache_data: Any) -> int:
+        """Best-effort byte estimate for extracted per-layer block data.
+
+        Sums ``nbytes`` over every array reachable in the nested structure
+        (tuples, marker strings, dicts, lists). Metadata-only: never touches
+        array contents, so it is safe on materialized arrays and on the
+        store-cache worker thread.
+        """
+        if isinstance(cache_data, (list, tuple)):
+            return sum(
+                PagedSSDCacheManager._estimate_cache_data_bytes(item)
+                for item in cache_data
+            )
+        if isinstance(cache_data, dict):
+            return sum(
+                PagedSSDCacheManager._estimate_cache_data_bytes(value)
+                for value in cache_data.values()
+            )
+        nbytes = getattr(cache_data, "nbytes", None)
+        if isinstance(nbytes, int):
+            return nbytes
+        return 0
 
     @staticmethod
     def _hot_cache_entry_size(entry: dict) -> int:
@@ -2034,6 +2103,16 @@ class PagedSSDCacheManager(CacheManager):
 
         Returns True when the entry was retained, False on failure.
         """
+        projected = 0
+        for arr in arrays.values():
+            nbytes = getattr(arr, "nbytes", None)
+            if isinstance(nbytes, int):
+                projected += nbytes
+        if not self._retention_admit(projected):
+            # Footprint ceiling reached: skip RAM retention. The block stays
+            # loadable from SSD, so this is a decline, not a failure.
+            self._stats["retention_declines"] += 1
+            return False
         try:
             promoted_raw = {}
             for name, arr in arrays.items():
@@ -2072,6 +2151,12 @@ class PagedSSDCacheManager(CacheManager):
         the hot cache is disabled.
         """
         if not self._hot_cache_enabled:
+            return False
+        if not self._retention_admit(self._hot_cache_entry_size(entry)):
+            # Footprint ceiling reached: skip RAM retention. The pending
+            # write still persists the entry to SSD, so this is a decline,
+            # not a failure.
+            self._stats["retention_declines"] += 1
             return False
         try:
             promoted_entry = dict(entry)
@@ -3441,6 +3526,36 @@ class PagedSSDCacheManager(CacheManager):
 
             # Merge CacheList sub_count metadata
             metadata.update(cache_list_meta)
+
+            # Hot-tier RAM retention admission (see retention_admission).
+            # Evaluated BEFORE extraction so a declined hot_cache_only block
+            # skips the host memcpy entirely. SSD-backed managers degrade to
+            # write-through (data still persisted, just not RAM-retained);
+            # hot_cache_only managers decline the save so store_cache rolls
+            # back this block's metadata and stops at the last valid prefix
+            # -- metadata must never outlive its data, or a later fetch
+            # matches a phantom prefix that cannot be reconstructed.
+            if self._hot_cache_enabled or self._hot_cache_only:
+                projected_block_bytes = self._estimate_cache_data_bytes(
+                    cache_data
+                )
+                if not self._retention_admit(projected_block_bytes):
+                    self._stats["retention_declines"] += 1
+                    if self._hot_cache_only:
+                        logger.debug(
+                            "Hot-tier retention declined for block %s "
+                            "(footprint ceiling); dropping block",
+                            block_hash.hex()[:16],
+                        )
+                        return False
+                    # SSD available: persist write-through, skip RAM retention.
+                    logger.debug(
+                        "Hot-tier retention declined for block %s "
+                        "(footprint ceiling); falling back to SSD "
+                        "write-through",
+                        block_hash.hex()[:16],
+                    )
+                    hot_cache_write_back = False
 
             # Last-mile materialization happens in _extract_tensor_bytes.
             # scheduler._cleanup_finished still pre-dispatches real KV arrays,
@@ -5001,6 +5116,7 @@ class PagedSSDCacheManager(CacheManager):
                 ],
                 ssd_write_drops=self._stats["ssd_write_drops"],
                 ssd_inline_write_fallbacks=self._stats["ssd_inline_write_fallbacks"],
+                retention_declines=self._stats["retention_declines"],
             )
 
     @property
@@ -5082,6 +5198,7 @@ class PagedSSDCacheManager(CacheManager):
                 ],
                 ssd_write_drops=self._stats["ssd_write_drops"],
                 ssd_inline_write_fallbacks=self._stats["ssd_inline_write_fallbacks"],
+                retention_declines=self._stats["retention_declines"],
             )
 
     def get_stats_dict(self) -> dict[str, Any]:

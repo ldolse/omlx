@@ -227,6 +227,7 @@ class PagedSSDCacheStats(BaseCacheStats):
     hot_cache_evictions: int = 0
     hot_cache_promotions: int = 0
     hot_cache_promotion_failures: int = 0
+    retention_declines: int = 0
 
     @property
     def save_rate(self) -> float:

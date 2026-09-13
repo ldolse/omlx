@@ -4628,3 +4628,187 @@ class TestEvictionDepthPreference:
             index.remove(hashes[0])
             index.remove(hashes[1])
             index.remove(hashes[2])
+
+class TestRetentionAdmission:
+    """Footprint-aware hot-tier RAM retention admission (``retention_admission``).
+
+    The admission predicate keeps the hot cache inside the process memory
+    ceiling: a declined block falls back to SSD write-through (SSD-backed
+    mode), is dropped with rollback (hot_cache_only mode), and SSD-load
+    promotion is skipped. A None predicate (default) retains unconditionally.
+    """
+
+    @pytest.fixture
+    def mock_mlx(self):
+        try:
+            import mlx.core as mx
+
+            return mx
+        except ImportError:
+            pytest.skip("MLX not available")
+
+    @staticmethod
+    def _cache_data(mx):
+        return [(mx.zeros((1, 2, 8, 8)), mx.zeros((1, 2, 8, 8)))]
+
+    def test_no_admission_retains_in_hot_cache(self, tmp_path, mock_mlx):
+        """Default (None predicate) keeps the historical behavior."""
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_passthrough",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+        )
+        block_hash = b"admit_passthrough_hash"
+        try:
+            assert (
+                manager.save_block(
+                    block_hash=block_hash,
+                    cache_data=self._cache_data(mock_mlx),
+                    token_count=8,
+                )
+                is True
+            )
+            assert manager._hot_cache_get(block_hash) is not None
+            assert manager._stats["retention_declines"] == 0
+        finally:
+            manager.close()
+
+    def test_decline_falls_back_to_ssd_write_through(self, tmp_path, mock_mlx):
+        """SSD-backed mode: declined retention still persists via SSD."""
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_decline_ssd",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+            retention_admission=lambda projected: False,
+        )
+        block_hash = b"admit_decline_ssd_hash"
+        try:
+            assert (
+                manager.save_block(
+                    block_hash=block_hash,
+                    cache_data=self._cache_data(mock_mlx),
+                    token_count=8,
+                )
+                is True
+            )
+            assert manager._hot_cache_get(block_hash) is None
+            assert manager.has_block(block_hash)
+            loaded = manager.load_block(block_hash)
+            assert loaded is not None
+            assert len(loaded) == 1
+            # Two declines: the save-time retention decline plus the
+            # pending-write promotion decline fired by load_block above.
+            assert manager._stats["retention_declines"] == 2
+        finally:
+            manager.close()
+
+    def test_decline_hot_cache_only_returns_false(self, tmp_path, mock_mlx):
+        """hot_cache_only mode: declined retention fails the save so
+        store_cache rolls back the block metadata (no phantom prefixes)."""
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_decline_hco",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+            hot_cache_only=True,
+            retention_admission=lambda projected: False,
+        )
+        block_hash = b"admit_decline_hco_hash"
+        try:
+            assert (
+                manager.save_block(
+                    block_hash=block_hash,
+                    cache_data=self._cache_data(mock_mlx),
+                    token_count=8,
+                )
+                is False
+            )
+            assert manager._hot_cache_get(block_hash) is None
+            assert manager._stats["retention_declines"] == 1
+        finally:
+            manager.close()
+
+    def test_decline_skips_ssd_load_promotion(self, tmp_path, mock_mlx):
+        """_promote_to_hot_cache honors the predicate: a decline is not a
+        failure and the block stays loadable from SSD."""
+        block_hash = b"admit_promote_hash"
+        arrays = {
+            "layer_0_state_0": mock_mlx.zeros((2, 2, 2, 2)),
+            "layer_0_state_1": mock_mlx.zeros((2, 2, 2, 2)),
+        }
+        metadata = PagedSSDBlockMetadata(
+            block_hash=block_hash,
+            file_path=tmp_path / "promote.safetensors",
+            file_size=0,
+            token_count=8,
+            created_at=0.0,
+            last_access=0.0,
+            num_layers=1,
+            model_name="test-model",
+        )
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_promote",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+            retention_admission=lambda projected: False,
+        )
+        try:
+            assert manager._promote_to_hot_cache(
+                block_hash, arrays, {}, metadata
+            ) is False
+            assert manager._hot_cache_get(block_hash) is None
+            assert manager._stats["retention_declines"] == 1
+            assert manager._stats["hot_cache_promotion_failures"] == 0
+
+            # Runtime install via set_retention_admission: allowing predicate
+            # retains again.
+            manager.set_retention_admission(lambda projected: True)
+            assert manager._promote_to_hot_cache(
+                block_hash, arrays, {}, metadata
+            ) is True
+            assert manager._hot_cache_get(block_hash) is not None
+        finally:
+            manager.close()
+
+    def test_decline_skips_pending_write_promotion(self, mock_mlx, tmp_path):
+        """_promote_pending_write_to_hot_cache honors the predicate."""
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_pending",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+            retention_admission=lambda projected: False,
+        )
+        entry = {"tensors_raw": {}}
+        try:
+            assert (
+                manager._promote_pending_write_to_hot_cache(
+                    b"admit_pending_hash", entry
+                )
+                is False
+            )
+            assert manager._hot_cache_get(b"admit_pending_hash") is None
+        finally:
+            manager.close()
+
+    def test_admission_receives_projected_bytes(self, tmp_path, mock_mlx):
+        """The predicate is called with the array byte count."""
+        seen: list[int] = []
+        manager = PagedSSDCacheManager(
+            cache_dir=tmp_path / "admit_seen",
+            max_size_bytes=1024**3,
+            hot_cache_max_bytes=64 * 1024**2,
+            retention_admission=lambda projected: (seen.append(projected) or True),
+        )
+        block_hash = b"admit_seen_hash"
+        # 2 layers x 2 tensors x (1*2*8*8 * 4 bytes fp32) = 1024 bytes
+        try:
+            assert (
+                manager.save_block(
+                    block_hash=block_hash,
+                    cache_data=self._cache_data(mock_mlx),
+                    token_count=8,
+                )
+                is True
+            )
+            assert seen == [1024]
+        finally:
+            manager.close()
