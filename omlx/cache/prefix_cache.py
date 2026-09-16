@@ -233,6 +233,12 @@ class BlockAwarePrefixCache(CacheManager):
         # Maps chain-hash(prefix) -> (prefix_len, block_ids, num_blocks)
         self._prefix_index: dict[bytes, tuple[int, tuple[int, ...], int]] = {}
 
+        # Chain key (terminal hash) of the most recently registered chain.
+        # lets the SSD eviction tier tell the actively-storing chain apart
+        # from dormant ones so self-sheds are visible in the eviction
+        # summary; diagnostics only, never a victim-selection input.
+        self._active_chain_key: bytes | None = None
+
         # Tie the index lifecycle to the paged cache's hash associations.
         # Without these hooks the index only ever grew (entries were dropped
         # solely by clear()), leaking Python heap for the process lifetime
@@ -875,6 +881,12 @@ class BlockAwarePrefixCache(CacheManager):
             )
 
         blocks_saved_to_ssd = 0
+        blocks_dedup_reused = 0
+        blocks_store_failed = 0
+        # The chain being stored is not trackable until its first block is
+        # registered (above); clearing here keeps the eviction summary from
+        # labeling the superseded chain as active while this store drains.
+        self._active_chain_key = None
         # Per-member CacheList layers need a boundary snapshot for every
         # non-last block. A missing middle snapshot must TRUNCATE the store
         # at that boundary: falling through to a placeholder produces a
@@ -1078,6 +1090,7 @@ class BlockAwarePrefixCache(CacheManager):
                     self.paged_cache.increment_ref(existing_block.block_id)
                     block_table.block_ids.append(existing_block.block_id)
                     block_table.num_tokens += len(block_tokens)
+                    blocks_dedup_reused += 1
                     continue
 
             # Allocate new block
@@ -1332,6 +1345,26 @@ class BlockAwarePrefixCache(CacheManager):
                                 block_table.num_tokens -= len(block_tokens)
                                 break
                         blocks_saved_to_ssd += 1
+                        # Register the chain prefix IMMEDIATELY, before the
+                        # next save_block call can run size enforcement.
+                        # Enforcement (save_block / _enqueue_ssd_write) runs
+                        # per block while the store drains into a near-full
+                        # cache; a block that is indexed but not yet chain-
+                        # registered lands in the untracked tier and is shed
+                        # before dormant chains -- the fresh chain then eats
+                        # itself and every later restore truncates at the
+                        # shared root (the 3/84 collapse). Re-registering the
+                        # whole prefix is idempotent with the final
+                        # _update_prefix_index pass below.
+                        if not _store_exact_terminal:
+                            self._update_prefix_index(
+                                tokens, block_table.block_ids, extra_keys=extra_keys
+                            )
+                            last_saved = self.paged_cache.allocated_blocks.get(
+                                block_table.block_ids[-1]
+                            )
+                            if last_saved is not None:
+                                self._active_chain_key = last_saved.block_hash
                         if is_last_block:
                             tip_block_saved = True
                         logger.debug(
@@ -1342,6 +1375,7 @@ class BlockAwarePrefixCache(CacheManager):
                         logger.warning(
                             f"Failed to save block {block.block_id} to tiered cache"
                         )
+                        blocks_store_failed += 1
                         # Persistence failed: roll back metadata so we don't
                         # retain a block that cannot be reconstructed later.
                         self.paged_cache.free_block(block.block_id)
@@ -1414,6 +1448,12 @@ class BlockAwarePrefixCache(CacheManager):
         if not _store_exact_terminal:
             self._update_prefix_index(
                 tokens, block_table.block_ids, extra_keys=extra_keys
+            )
+            self._log_store_snapshot(
+                request_id,
+                blocks_saved_to_ssd,
+                blocks_dedup_reused,
+                blocks_store_failed,
             )
 
         # Store entry for request tracking
@@ -4825,7 +4865,15 @@ class BlockAwarePrefixCache(CacheManager):
         """
         best: dict[bytes, tuple[int, bytes, int]] = {}
         allocated_blocks = self.paged_cache.allocated_blocks
-        for key_hash, entry in self._prefix_index.items():
+        # Snapshot the index before iterating: hash-dropped hooks fire from
+        # other threads (release paths) and a concurrent pop would otherwise
+        # raise "dictionary changed size during iteration", which the SSD
+        # tier's fail-open turns into a silent pure-LRU eviction pass.
+        try:
+            index_snapshot = list(self._prefix_index.items())
+        except RuntimeError:  # pragma: no cover - defensive
+            index_snapshot = []
+        for key_hash, entry in index_snapshot:
             block_ids = entry[1]
             chain_len = entry[2]
             for depth, block_id in enumerate(block_ids):
@@ -4840,6 +4888,57 @@ class BlockAwarePrefixCache(CacheManager):
             block_hash: (chain_key, depth)
             for block_hash, (_, chain_key, depth) in best.items()
         }
+
+    def get_active_chain_key(self) -> bytes | None:
+        """Chain key of the most recently registered (storing) chain.
+
+        Wired into the SSD tier as the active-chain provider so eviction
+        summaries can distinguish self-sheds (active-chain victims) from
+        dormant-chain sheds. Diagnostic only: victim ordering never reads
+        this.
+        """
+        return self._active_chain_key
+
+    def _log_store_snapshot(
+        self,
+        request_id: str,
+        saved: int,
+        dedup_reused: int,
+        failed: int,
+    ) -> None:
+        """One INFO line per store describing chain tracking coverage.
+
+        This is the observable that answers "why did the cache keep files
+        the active chain needed": untracked counts indexed SSD files that
+        no registered chain claims, and a high untracked count during
+        growth means eviction is spending the budget on the wrong victims.
+        """
+        ssd = self.paged_ssd_cache
+        if ssd is None:
+            return
+        try:
+            groups = self.get_chain_eviction_groups()
+            indexed = ssd.indexed_file_count()
+            tracked = sum(1 for h in groups if ssd.has_block(h))
+            chains = len({chain_key for chain_key, _ in groups.values()})
+            logger.info(
+                "Cache store for %s: saved=%d dedup=%d failed=%d "
+                "chain_blocks=%d indexed=%d tracked=%d untracked=%d "
+                "chains=%d",
+                request_id,
+                saved,
+                dedup_reused,
+                failed,
+                len(groups),
+                indexed,
+                tracked,
+                max(0, indexed - tracked),
+                chains,
+            )
+        except Exception:  # noqa: BLE001 - diagnostics must never break a store
+            logger.debug(
+                "Store snapshot logging failed for %s", request_id, exc_info=True
+            )
 
     def _on_block_hash_dropped(self, block_hash: bytes) -> None:
         """Drop the prefix-index entry for a dead block-hash association.

@@ -1699,6 +1699,7 @@ class PagedSSDCacheManager(CacheManager):
         self._eviction_depth_provider: (
             Callable[[], dict[bytes, tuple[bytes, int]]] | None
         ) = None
+        self._eviction_active_chain_provider: Callable[[], bytes | None] | None = None
         self._retention_admission = retention_admission
         self._index = PagedSSDCacheIndex(max_size_bytes)
         self._incompatible_index = PagedSSDCacheIndex(max_size_bytes)
@@ -4255,6 +4256,10 @@ class PagedSSDCacheManager(CacheManager):
         """
         return self._index.get(block_hash)
 
+    def indexed_file_count(self) -> int:
+        """Number of files currently tracked in the main SSD index."""
+        return len(self._index._index)
+
     def has_block(self, block_hash: bytes) -> bool:
         """
         Check if a block exists in cache (hot cache, pending writes, or SSD storage).
@@ -4678,6 +4683,28 @@ class PagedSSDCacheManager(CacheManager):
         """
         self._eviction_depth_provider = provider
 
+    def set_eviction_active_chain_provider(
+        self, provider: Callable[[], bytes | None] | None
+    ) -> None:
+        """Install the active-chain provider used by eviction diagnostics.
+
+        Returns the chain key of the chain currently being stored (or the
+        most recently stored one), so eviction summaries can label
+        active-chain victims (self-sheds) separately from dormant-chain
+        sheds. Diagnostic only: victim ordering never reads it.
+        """
+        self._eviction_active_chain_provider = provider
+
+    def _active_chain_key(self) -> bytes | None:
+        """Fail-open snapshot of the active chain key (None when unknown)."""
+        provider = self._eviction_active_chain_provider
+        if provider is None:
+            return None
+        try:
+            return provider()
+        except Exception:
+            return None
+
     def _eviction_groups(self) -> dict[bytes, tuple[bytes, int]] | None:
         """Snapshot the chain-group map, failing open to None (pure LRU)."""
         provider = self._eviction_depth_provider
@@ -4720,6 +4747,11 @@ class PagedSSDCacheManager(CacheManager):
         """
         evicted: list[tuple[Any, Any]] = []
         groups = self._eviction_groups()
+        active_key = self._active_chain_key()
+        now = time.time()
+        shed_tiers = {"untracked": 0, "active": 0, "dormant": 0, "other": 0}
+        shed_bytes = 0
+        oldest_age = 0.0
 
         while self._tracked_ssd_size() > target_size:
             if max_count is not None and len(evicted) >= max_count:
@@ -4815,6 +4847,41 @@ class PagedSSDCacheManager(CacheManager):
                 metadata = source_index.remove(candidate.block_hash)
             if metadata is not None:
                 evicted.append((source_index, metadata))
+                # Classify for the eviction summary: the catastrophe
+                # signature is active-chain (self) sheds while untracked or
+                # dormant files remain, which this line makes visible.
+                if groups is None:
+                    tier = "other"
+                else:
+                    group = groups.get(metadata.block_hash)
+                    if group is None:
+                        tier = "untracked"
+                    elif active_key is not None and group[0] == active_key:
+                        tier = "active"
+                    else:
+                        tier = "dormant"
+                shed_tiers[tier] += 1
+                shed_bytes += metadata.file_size
+                age = max(0.0, now - metadata.last_access)
+                oldest_age = max(oldest_age, age)
+                self._stats.setdefault("evictions_self_shed", 0)
+                if tier == "active":
+                    self._stats["evictions_self_shed"] += 1
+
+        if evicted:
+            logger.info(
+                "SSD eviction: shed=%d freed=%s over_target=%s "
+                "untracked=%d active=%d dormant=%d other=%d "
+                "oldest_victim_age=%.0fs",
+                len(evicted),
+                format_bytes(shed_bytes),
+                format_bytes(max(0, self._tracked_ssd_size() - target_size)),
+                shed_tiers["untracked"],
+                shed_tiers["active"],
+                shed_tiers["dormant"],
+                shed_tiers["other"],
+                oldest_age,
+            )
 
         return evicted
 

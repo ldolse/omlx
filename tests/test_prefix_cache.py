@@ -4641,3 +4641,174 @@ class TestReconstructionSilentFallbackHardening:
 
         assert rebuilt is not None
         assert rebuilt.offset == self.BLOCK
+
+
+class TestSSDChainRegistrationTiming:
+    """Incremental chain registration during store_cache.
+
+    Size enforcement runs inside every save_block call while a store
+    drains into a near-full cache. A block that is indexed but not yet
+    chain-registered lands in the eviction tier's untracked class and is
+    shed before dormant chains -- the fresh chain eats itself, and every
+    later restore truncates at the shared root (the 3/84 collapse).
+    store_cache must therefore register each saved block's chain prefix
+    BEFORE the next save's enforcement runs.
+    """
+
+    BLOCK = 4
+    LAYERS = 1
+    NUM_BLOCKS = 12
+
+    def _make_stack(self, cache_dir: Path, max_size_bytes: int):
+        ssd_manager = PagedSSDCacheManager(
+            cache_dir=cache_dir,
+            max_size_bytes=max_size_bytes,
+            expected_model_name="test-model",
+            expected_num_layers=self.LAYERS,
+            expected_block_size=self.BLOCK,
+        )
+        paged_manager = PagedCacheManager(
+            block_size=self.BLOCK,
+            max_blocks=200,
+            model_name="test-model",
+            initial_blocks=200,
+        )
+        paged_manager.set_paged_ssd_cache_manager(ssd_manager)
+        prefix_cache = BlockAwarePrefixCache(
+            model=MockModel(num_layers=self.LAYERS),
+            paged_cache_manager=paged_manager,
+            paged_ssd_cache_manager=ssd_manager,
+        )
+        ssd_manager.set_eviction_depth_provider(
+            prefix_cache.get_chain_eviction_groups
+        )
+        ssd_manager.set_eviction_active_chain_provider(
+            prefix_cache.get_active_chain_key
+        )
+        return prefix_cache, paged_manager, ssd_manager
+
+    def _store(self, prefix_cache, request_id: str, tokens: list[int]):
+        import mlx.core as mx
+
+        from omlx.cache.hybrid_cache import ModelCacheConfig
+
+        keys = mx.arange(len(tokens), dtype=mx.float32).reshape(
+            1, 1, len(tokens), 1
+        )
+        extracted = [
+            {
+                "state": (keys, keys + 100),
+                "meta_state": (len(tokens),),
+                "class_name": "KVCache",
+                "cache_type": "KVCache",
+            }
+        ]
+        config = ModelCacheConfig.from_type_list(
+            ["KVCache"], model_name="test-model"
+        )
+        return prefix_cache.store_cache(
+            request_id,
+            tokens,
+            extracted,
+            model_cache_config=config,
+            hot_cache_write_back=False,
+        )
+
+    def _chain_hashes(self, prefix_cache, table) -> list[bytes]:
+        hashes = []
+        for block_id in table.block_ids:
+            block = prefix_cache.paged_cache.allocated_blocks.get(block_id)
+            assert block is not None and block.block_hash is not None
+            hashes.append(bytes(block.block_hash))
+        return hashes
+
+    def _drain_writes(self, ssd_manager, timeout: float = 15.0) -> None:
+        deadline = time.time() + timeout
+        while ssd_manager._pending_write_hashes and time.time() < deadline:
+            time.sleep(0.05)
+        assert not ssd_manager._pending_write_hashes
+
+    def test_divergent_rewrite_preserves_fresh_chain(self, tmp_path, caplog):
+        """Regression for the 3/84 collapse: a full-chain rewrite into a
+        near-full cache must shed the dormant chain, never the fresh one."""
+        caplog.set_level(logging.INFO)
+        prefix_cache, _, ssd = self._make_stack(
+            tmp_path / "rewrite", 100 * 1024**2
+        )
+        try:
+            tokens_a = list(range(self.NUM_BLOCKS * self.BLOCK))
+            table_a = self._store(prefix_cache, "req-a", tokens_a)
+            assert table_a is not None
+            hashes_a = self._chain_hashes(prefix_cache, table_a)
+            assert len(hashes_a) == self.NUM_BLOCKS
+            kept_a = [h for h in hashes_a if ssd.has_block(h)]
+            assert len(kept_a) == self.NUM_BLOCKS
+            prefix_cache.clear_request_entry("req-a")
+
+            # Shrink the cap so the divergent rewrite must evict: room for
+            # chain B itself plus half of its size of headroom.
+            size_a = ssd._tracked_ssd_size()
+            ssd._max_size = size_a + max(size_a // 2, 4096)
+
+            tokens_b = [0, 1, 2, 3] + [
+                100 + i for i in range(self.NUM_BLOCKS * self.BLOCK - 4)
+            ]
+            table_b = self._store(prefix_cache, "req-b", tokens_b)
+            assert table_b is not None
+            hashes_b = self._chain_hashes(prefix_cache, table_b)
+
+            # THE regression: every block of the fresh chain must survive
+            # its own store's enforcement.
+            missing = [h for h in hashes_b if not ssd.has_block(h)]
+            assert not missing, (
+                f"fresh chain shed itself: {len(missing)}/{len(hashes_b)} "
+                "blocks lost"
+            )
+            # The dormant chain paid instead.
+            kept_a_after = [h for h in hashes_a if ssd.has_block(h)]
+            assert len(kept_a_after) < len(kept_a)
+
+            self._drain_writes(ssd)
+            for h in hashes_b:
+                assert Path(ssd._index.get(h).file_path).exists()
+        finally:
+            ssd.close()
+
+        assert "Cache store for req-b" in caplog.text
+        assert "SSD eviction: shed=" in caplog.text
+
+    def test_incremental_registration_matches_final_pass(self, tmp_path):
+        """The per-save registrations must converge to exactly what the
+        final full-chain pass produces (idempotence)."""
+        prefix_cache, _, ssd = self._make_stack(
+            tmp_path / "idempotent", 100 * 1024**2
+        )
+        try:
+            tokens = list(range(8 * self.BLOCK))
+            table = self._store(prefix_cache, "req-idem", tokens)
+            assert table is not None
+            snapshot = dict(prefix_cache._prefix_index)
+            assert len(snapshot) == 8
+            prefix_cache._update_prefix_index(tokens, table.block_ids)
+            assert prefix_cache._prefix_index == snapshot
+        finally:
+            ssd.close()
+
+    def test_failed_save_rolls_back_registration(self, tmp_path):
+        """A failed save pops the block; neither the incremental nor the
+        final registration may retain its hash."""
+        prefix_cache, _, ssd = self._make_stack(
+            tmp_path / "rollback", 100 * 1024**2
+        )
+        try:
+            tokens = list(range(4 * self.BLOCK))
+            with patch.object(
+                ssd, "save_block", side_effect=[True, False]
+            ):
+                table = self._store(prefix_cache, "req-fail", tokens)
+            assert table is not None
+            assert len(table.block_ids) == 1
+            assert table.num_tokens == self.BLOCK
+            assert len(prefix_cache._prefix_index) == 1
+        finally:
+            ssd.close()

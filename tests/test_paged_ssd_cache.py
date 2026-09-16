@@ -4629,6 +4629,68 @@ class TestEvictionDepthPreference:
             index.remove(hashes[1])
             index.remove(hashes[2])
 
+    def test_foreign_files_shed_before_active_chain_growth(self, tmp_path):
+        # The guarantee under test: the active chain can claim the entire
+        # cache. Untracked stragglers shed first (LRU), then the dormant
+        # chain (chain-granular LRU, tip-first); the active chain sheds
+        # only once nothing foreign remains, and then tip-first.
+        active = [f"active_{i}".encode() for i in range(3)]
+        dormant = [f"dormant_{i}".encode() for i in range(3)]
+        strays = [f"stray_{i}".encode() for i in range(4)]
+        groups = {h: (b"chain_active", i) for i, h in enumerate(active)}
+        groups.update({h: (b"chain_dormant", i) for i, h in enumerate(dormant)})
+        mgr = self._make_manager(tmp_path, lambda: groups)
+        try:
+            for h in strays:
+                mgr._index.add(self._metadata(h, 100.0, size=500))
+            for h in dormant:
+                mgr._index.add(self._metadata(h, 500.0, size=500))
+            for h in active:
+                mgr._index.add(self._metadata(h, 2000.0, size=1000))
+            # total = 4*500 + 3*500 + 3*1000 = 6500; shed 3000 bytes.
+            evicted = mgr._evict_tracked_until_size(6500 - 3000)
+            shed = [m.block_hash for _, m in evicted]
+            # Stragglers first (oldest LRU), then the dormant chain
+            # tip-first. No active-chain block is touched.
+            assert shed == [*strays, dormant[2], dormant[1]]
+            assert all(mgr._index.get(h) is not None for h in active)
+            # Shed 1500 more: the dormant root goes, then the active tip.
+            evicted = mgr._evict_tracked_until_size(6500 - 4500)
+            shed = [m.block_hash for _, m in evicted]
+            assert shed == [dormant[0], active[2]]
+            assert mgr._index.get(active[0]) is not None
+            assert mgr._index.get(active[1]) is not None
+        finally:
+            mgr.close()
+
+    def test_active_chain_shed_counter_counts_self_sheds(self, tmp_path):
+        # The eviction summary must make self-sheds visible: victims that
+        # belong to the chain reported by the active-chain provider.
+        active = [f"self_shed_{i}".encode() for i in range(3)]
+        groups = {h: (b"chain_self", i) for i, h in enumerate(active)}
+        mgr = self._make_manager(tmp_path, lambda: groups)
+        mgr.set_eviction_active_chain_provider(lambda: b"chain_self")
+        try:
+            for h in active:
+                mgr._index.add(self._metadata(h, 1000.0))
+            mgr._evict_tracked_until_size(1000)
+            assert mgr._stats.get("evictions_self_shed") == 2
+        finally:
+            mgr.close()
+
+    def test_dormant_chain_shed_not_counted_as_self_shed(self, tmp_path):
+        dormant = [f"dormant_cnt_{i}".encode() for i in range(2)]
+        groups = {h: (b"chain_old", i) for i, h in enumerate(dormant)}
+        mgr = self._make_manager(tmp_path, lambda: groups)
+        # No active-chain provider wired: nothing is a self-shed.
+        try:
+            for h in dormant:
+                mgr._index.add(self._metadata(h, 1000.0))
+            mgr._evict_tracked_until_size(1000)
+            assert mgr._stats.get("evictions_self_shed", 0) == 0
+        finally:
+            mgr.close()
+
 class TestRetentionAdmission:
     """Footprint-aware hot-tier RAM retention admission (``retention_admission``).
 

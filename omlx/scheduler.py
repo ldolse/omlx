@@ -9031,6 +9031,9 @@ class Scheduler:
                 draft_ssd.set_eviction_depth_provider(
                     self._draft_prefix_cache.get_chain_eviction_groups
                 )
+                draft_ssd.set_eviction_active_chain_provider(
+                    self._draft_prefix_cache.get_active_chain_key
+                )
                 logger.info(
                     f"SpecPrefill: draft model set with SSD cache (model_name={name})"
                 )
@@ -13586,6 +13589,9 @@ class Scheduler:
                 # get_chain_eviction_groups).
                 self.paged_ssd_cache_manager.set_eviction_depth_provider(
                     self.block_aware_cache.get_chain_eviction_groups
+                )
+                self.paged_ssd_cache_manager.set_eviction_active_chain_provider(
+                    self.block_aware_cache.get_active_chain_key
                 )
 
             # Initialize boundary snapshot SSD store for offloading

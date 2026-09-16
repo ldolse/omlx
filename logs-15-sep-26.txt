@@ -1,0 +1,297 @@
+2026-09-15 17:09:50,140 - omlx.patches.mlx_vlm_mlx0322_compat - INFO - [-] - mlx-vlm MLX 0.32.2 compatibility patch installed
+2026-09-15 17:09:50,287 - omlx.scheduler - INFO - [-] - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-09-15 17:09:50,432 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 17:09:50,432 - omlx.server - INFO - [-] - Generated and saved new auth secret key
+2026-09-15 17:09:50,432 - omlx.server - INFO - [-] - CORS origins: ['*']
+2026-09-15 17:09:50,433 - omlx.model_settings - INFO - [-] - Loaded settings for 1 models
+2026-09-15 17:09:50,454 - omlx.engine_pool - INFO - [-] - Discovered 0 models
+2026-09-15 17:09:50,454 - omlx.server - WARNING - [-] - No models found in /Users/leedolsen/.omlx/models, /Users/leedolsen/.cache/huggingface/hub. Add models to serve them.
+2026-09-15 17:09:50,455 - omlx.server_metrics - INFO - [-] - Loaded all-time stats from /Users/leedolsen/.omlx/stats.json
+2026-09-15 17:09:50,457 - omlx.server - INFO - [-] - Server initialized with 0 models
+2026-09-15 17:09:50,457 - omlx.server - INFO - [-] - No default model (no models available)
+2026-09-15 17:09:50,457 - omlx.server - INFO - [-] - Memory guard tier: balanced (guard on)
+2026-09-15 17:09:50,457 - omlx.server - INFO - [-] - Default max tokens: 32768
+2026-09-15 17:09:50,461 - omlx.server - INFO - [-] - HF Downloader initialized
+2026-09-15 17:09:50,488 - omlx.server - INFO - [-] - ModelScope Downloader initialized
+2026-09-15 17:09:50,490 - omlx.server - INFO - [-] - oQ Quantizer initialized
+2026-09-15 17:09:50,492 - omlx.server - INFO - [-] - HF Uploader initialized
+2026-09-15 17:09:50,516 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 17:09:50,516 - omlx.server - INFO - [-] - Auto-detected server aliases: ['localhost', '127.0.0.1', 'studio.wakerant.com', 'studio.wakerant.com.local', '192.168.2.204', '192.168.2.203']
+2026-09-15 17:09:50,532 - omlx.process_memory_enforcer - WARNING - [-] - iogpu.wired_limit_mb (506.0GB) leaves the OS less than 25.6GB of physical RAM (512.0GB); a large model load can trigger jetsam at this setting and strand the wired memory until reboot (#2184). Recommended maximum: 498073 MB.
+2026-09-15 17:09:50,535 - omlx.process_memory_enforcer - INFO - [-] - Metal wired limit raised: 0.0GB -> 506.0GB (target=506.0GB, iogpu sysctl cap=506.0GB)
+2026-09-15 17:09:50,535 - omlx.process_memory_enforcer - INFO - [-] - Process memory enforcer started (tier=balanced, ceiling=494.6GB, interval=1.0s)
+2026-09-15 20:32:14,079 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 20:32:14,080 - omlx.admin.routes - INFO - [-] - API key configured via initial setup
+2026-09-15 20:33:14,016 - omlx.process_memory_enforcer - INFO - [-] - Process memory enforcer stopped
+2026-09-15 20:33:14,017 - omlx.server - INFO - [-] - Process memory enforcer stopped
+2026-09-15 20:33:14,017 - omlx.admin.hf_downloader - INFO - [-] - HF Downloader shut down
+2026-09-15 20:33:14,017 - omlx.server - INFO - [-] - HF Downloader stopped
+2026-09-15 20:33:14,017 - omlx.admin.ms_downloader - INFO - [-] - MS Downloader shut down
+2026-09-15 20:33:14,017 - omlx.server - INFO - [-] - MS Downloader stopped
+2026-09-15 20:33:14,017 - omlx.engine_pool - INFO - [-] - Engine pool shutdown complete
+2026-09-15 20:33:14,018 - omlx.server - INFO - [-] - Engine pool shutdown
+2026-09-15 20:34:28,577 - omlx.patches.mlx_vlm_mlx0322_compat - INFO - [-] - mlx-vlm MLX 0.32.2 compatibility patch installed
+2026-09-15 20:34:28,696 - omlx.scheduler - INFO - [-] - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-09-15 20:34:28,843 - omlx.server - INFO - [-] - CORS origins: ['*']
+2026-09-15 20:34:28,843 - omlx.model_settings - INFO - [-] - Loaded settings for 1 models
+2026-09-15 20:34:28,863 - omlx.engine_pool - INFO - [-] - Discovered 0 models
+2026-09-15 20:34:28,863 - omlx.server - WARNING - [-] - No models found in /Users/leedolsen/.omlx/models, /Users/leedolsen/.cache/huggingface/hub. Add models to serve them.
+2026-09-15 20:34:28,864 - omlx.server_metrics - INFO - [-] - Loaded all-time stats from /Users/leedolsen/.omlx/stats.json
+2026-09-15 20:34:28,866 - omlx.server - INFO - [-] - Server initialized with 0 models
+2026-09-15 20:34:28,866 - omlx.server - INFO - [-] - No default model (no models available)
+2026-09-15 20:34:28,866 - omlx.server - INFO - [-] - Memory guard tier: balanced (guard on)
+2026-09-15 20:34:28,866 - omlx.server - INFO - [-] - Default max tokens: 32768
+2026-09-15 20:34:28,866 - omlx.server - INFO - [-] - API key authentication: enabled
+2026-09-15 20:34:28,870 - omlx.server - INFO - [-] - HF Downloader initialized
+2026-09-15 20:34:28,888 - omlx.server - INFO - [-] - ModelScope Downloader initialized
+2026-09-15 20:34:28,891 - omlx.server - INFO - [-] - oQ Quantizer initialized
+2026-09-15 20:34:28,892 - omlx.server - INFO - [-] - HF Uploader initialized
+2026-09-15 20:34:28,915 - omlx.process_memory_enforcer - WARNING - [-] - iogpu.wired_limit_mb (506.0GB) leaves the OS less than 25.6GB of physical RAM (512.0GB); a large model load can trigger jetsam at this setting and strand the wired memory until reboot (#2184). Recommended maximum: 498073 MB.
+2026-09-15 20:34:28,919 - omlx.process_memory_enforcer - INFO - [-] - Metal wired limit raised: 0.0GB -> 506.0GB (target=506.0GB, iogpu sysctl cap=506.0GB)
+2026-09-15 20:34:28,919 - omlx.process_memory_enforcer - INFO - [-] - Process memory enforcer started (tier=balanced, ceiling=494.0GB, interval=1.0s)
+2026-09-15 20:35:36,175 - omlx.admin.routes - INFO - [-] - Burst Decode mode set to 'balanced'
+2026-09-15 20:35:36,175 - omlx.admin.routes - INFO - [-] - Memory guard updated — tier: balanced -> balanced, custom_ceiling: 0.0 GB
+2026-09-15 20:35:36,176 - omlx.process_memory_enforcer - INFO - [-] - Prefill memory guard: enabled
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Prefill memory guard enabled
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Chunked prefill disabled
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Prefill priority set to 'context'
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Decode fairness enabled
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Cache settings updated. Unloaded 0 models.
+2026-09-15 20:35:36,176 - omlx.admin.routes - INFO - [-] - Network settings updated
+2026-09-15 20:35:36,177 - omlx.admin.routes - INFO - [-] - Sampling defaults updated: max_context_window=32768, max_context_window_policy=None, max_tokens=32768, temperature=1.0, top_p=0.95, top_k=0, repetition_penalty=1.0
+2026-09-15 20:35:36,177 - omlx.admin.routes - INFO - [-] - Idle timeout disabled
+2026-09-15 20:35:36,177 - omlx.admin.routes - INFO - [-] - API key updated via admin settings
+2026-09-15 20:35:36,179 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 20:35:36,180 - omlx.admin.routes - INFO - [-] - Embedding batch size set to 32
+2026-09-15 20:35:59,910 - omlx.process_memory_enforcer - INFO - [-] - Process memory enforcer stopped
+2026-09-15 20:35:59,910 - omlx.server - INFO - [-] - Process memory enforcer stopped
+2026-09-15 20:35:59,910 - omlx.admin.hf_downloader - INFO - [-] - HF Downloader shut down
+2026-09-15 20:35:59,910 - omlx.server - INFO - [-] - HF Downloader stopped
+2026-09-15 20:35:59,910 - omlx.admin.ms_downloader - INFO - [-] - MS Downloader shut down
+2026-09-15 20:35:59,910 - omlx.server - INFO - [-] - MS Downloader stopped
+2026-09-15 20:35:59,910 - omlx.engine_pool - INFO - [-] - Engine pool shutdown complete
+2026-09-15 20:35:59,911 - omlx.server - INFO - [-] - Engine pool shutdown
+2026-09-15 20:36:02,595 - omlx.patches.mlx_vlm_mlx0322_compat - INFO - [-] - mlx-vlm MLX 0.32.2 compatibility patch installed
+2026-09-15 20:36:02,711 - omlx.scheduler - INFO - [-] - ChunkedKVCache patch: methods already present upstream, skipped: size
+2026-09-15 20:36:02,851 - omlx.server - INFO - [-] - CORS origins: ['*']
+2026-09-15 20:36:02,851 - omlx.model_settings - INFO - [-] - Loaded settings for 1 models
+2026-09-15 20:36:02,871 - omlx.engine_pool - INFO - [-] - Discovered 0 models
+2026-09-15 20:36:02,871 - omlx.server - WARNING - [-] - No models found in /Users/leedolsen/.omlx/models, /Users/leedolsen/.cache/huggingface/hub. Add models to serve them.
+2026-09-15 20:36:02,871 - omlx.server_metrics - INFO - [-] - Loaded all-time stats from /Users/leedolsen/.omlx/stats.json
+2026-09-15 20:36:02,874 - omlx.server - INFO - [-] - Server initialized with 0 models
+2026-09-15 20:36:02,874 - omlx.server - INFO - [-] - No default model (no models available)
+2026-09-15 20:36:02,874 - omlx.server - INFO - [-] - Memory guard tier: balanced (guard on)
+2026-09-15 20:36:02,874 - omlx.server - INFO - [-] - Default max tokens: 32768
+2026-09-15 20:36:02,874 - omlx.server - INFO - [-] - API key authentication: enabled
+2026-09-15 20:36:02,878 - omlx.server - INFO - [-] - HF Downloader initialized
+2026-09-15 20:36:02,895 - omlx.server - INFO - [-] - ModelScope Downloader initialized
+2026-09-15 20:36:02,898 - omlx.server - INFO - [-] - oQ Quantizer initialized
+2026-09-15 20:36:02,899 - omlx.server - INFO - [-] - HF Uploader initialized
+2026-09-15 20:36:02,919 - omlx.process_memory_enforcer - WARNING - [-] - iogpu.wired_limit_mb (506.0GB) leaves the OS less than 25.6GB of physical RAM (512.0GB); a large model load can trigger jetsam at this setting and strand the wired memory until reboot (#2184). Recommended maximum: 498073 MB.
+2026-09-15 20:36:02,922 - omlx.process_memory_enforcer - INFO - [-] - Metal wired limit raised: 0.0GB -> 506.0GB (target=506.0GB, iogpu sysctl cap=506.0GB)
+2026-09-15 20:36:02,922 - omlx.process_memory_enforcer - INFO - [-] - Process memory enforcer started (tier=balanced, ceiling=493.7GB, interval=1.0s)
+2026-09-15 21:05:26,265 - omlx.server - WARNING - [-] - POST /v1/chat/completions → 404: Model 'GLM-5.3-Flash-oQ6e-mtp' not found. Available models: (none)
+2026-09-15 21:41:44,955 - omlx.admin.routes - INFO - [-] - Burst Decode mode set to 'balanced'
+2026-09-15 21:41:44,977 - omlx.model_discovery - WARNING - [-] - Model at /Volumes/TB5_SSD/llm_models/mlx-community/GLM-4.6V-6bit ships a stale model.safetensors.index.json: none of the 41 shard(s) it references exist (e.g. model-00001-of-00041.safetensors, model-00002-of-00041.safetensors, model-00003-of-00041.safetensors), but the weight files present form a complete set — registering the model anyway.
+2026-09-15 21:41:44,986 - omlx.model_discovery - INFO - [-] - Discovered model: GLM-4.6V-6bit (type: vlm, engine: vlm, size: 86.61GB, text-only: 84.93GB)
+2026-09-15 21:41:44,990 - omlx.model_discovery - INFO - [-] - Discovered model: GLM-4.7-4bit (type: llm, engine: batched, size: 194.17GB)
+2026-09-15 21:41:44,993 - omlx.model_discovery - INFO - [-] - Discovered model: GLM-5.2-REAP25-MLX-4bit (type: llm, engine: batched, size: 309.35GB)
+2026-09-15 21:41:44,994 - omlx.model_discovery - ERROR - [-] - Failed to discover model Qwen3.5-397B-A17B-GGUF: No model weights found in /Volumes/TB5_SSD/llm_models/unsloth/Qwen3.5-397B-A17B-GGUF
+2026-09-15 21:41:44,998 - omlx.model_discovery - INFO - [-] - glm5_next detected as mlx-vlm native text model
+2026-09-15 21:41:45,007 - omlx.model_discovery - INFO - [-] - Discovered model: GLM-5.3-Flash-oQ6e-mtp (type: vlm, engine: vlm, size: 251.19GB, text-only: 250.09GB)
+2026-09-15 21:41:45,007 - omlx.engine_pool - INFO - [-] - Discovered 4 models
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Re-discovered 4 models from 3 directories
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Memory guard updated — tier: balanced -> balanced, custom_ceiling: 0.0 GB
+2026-09-15 21:41:45,007 - omlx.process_memory_enforcer - INFO - [-] - Prefill memory guard: enabled
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Prefill memory guard enabled
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Chunked prefill disabled
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Prefill priority set to 'context'
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Decode fairness enabled
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Cache settings updated. Unloaded 0 models.
+2026-09-15 21:41:45,007 - omlx.admin.routes - INFO - [-] - Network settings updated
+2026-09-15 21:41:45,008 - omlx.admin.routes - INFO - [-] - Sampling defaults updated: max_context_window=32768, max_context_window_policy=None, max_tokens=32768, temperature=1.0, top_p=0.95, top_k=0, repetition_penalty=1.0
+2026-09-15 21:41:45,008 - omlx.admin.routes - INFO - [-] - Idle timeout disabled
+2026-09-15 21:41:45,008 - omlx.admin.routes - INFO - [-] - API key updated via admin settings
+2026-09-15 21:41:45,009 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 21:41:45,009 - omlx.admin.routes - INFO - [-] - Embedding batch size set to 32
+2026-09-15 21:42:44,283 - omlx.engine_pool - INFO - [-] - Loading model: GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 21:42:44,289 - omlx.utils.model_loading - INFO - [-] - M5 sorted gather_qmm reroute installed (issue #2267)
+2026-09-15 21:42:44,305 - omlx.patches.deepseek_v4 - INFO - [-] - PoolingCache / BatchPoolingCache injected into mlx_lm.models.cache
+2026-09-15 21:42:44,307 - omlx.patches.deepseek_v4.generate_patch - INFO - [-] - mlx_lm.generate._make_cache replaced (PoolingCache aware)
+2026-09-15 21:42:44,309 - omlx.patches.deepseek_v4 - INFO - [-] - PoolingCacheHandler + BatchPoolingCacheHandler registered
+2026-09-15 21:42:44,342 - omlx.custom_kernels.glm_moe_dsa.fast - WARNING - [-] - omlx.custom_kernels.glm_moe_dsa.fast: native extension is present but failed to load; falling back to the slow path: cannot import name '_ext' from partially initialized module 'omlx.custom_kernels.glm_moe_dsa' (most likely due to a circular import) (/Volumes/TB5_SSD/omlx/omlx/custom_kernels/glm_moe_dsa/__init__.py)
+2026-09-15 21:42:44,347 - omlx.custom_kernels.qwen35_prefill.fast - WARNING - [-] - omlx.custom_kernels.qwen35_prefill.fast: native extension is present but failed to load; falling back to the slow path: cannot import name '_ext' from partially initialized module 'omlx.custom_kernels.qwen35_prefill' (most likely due to a circular import) (/Volumes/TB5_SSD/omlx/omlx/custom_kernels/qwen35_prefill/__init__.py)
+2026-09-15 21:42:44,361 - omlx.patches.mlx_vlm_glm5_next_compat - INFO - [-] - GLM-5.3 mlx-vlm compatibility patch applied
+2026-09-15 21:42:44,361 - omlx.utils.model_loading - INFO - [-] - GLM-5.3 mlx-vlm compatibility patch applied for /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 21:42:44,389 - omlx.patches.mlx_lm_mtp.qwen35_model - INFO - [-] - Qwen3.5/3.6 MTP model patch applied (PR 990)
+2026-09-15 21:42:44,391 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - [-] - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-09-15 21:42:44,392 - omlx.patches.qwen35_verify_qmm - INFO - [-] - MTP verify qmm patch applied (M=2..6 affine 4/8-bit)
+2026-09-15 21:42:44,398 - omlx.patches.mlx_vlm_mtp.qwen35_vlm_model - INFO - [-] - Patched mlx_vlm.models.qwen3_5.Model.sanitize for MTP
+2026-09-15 21:42:44,398 - omlx.patches.mlx_vlm_mtp.qwen35_moe_vlm_model - INFO - [-] - Patched mlx_vlm.models.qwen3_5_moe.Model.sanitize for MTP
+2026-09-15 21:42:44,408 - omlx.patches.mlx_vlm_inkling_compat - INFO - [-] - Inkling mlx-vlm compatibility patch applied
+2026-09-15 21:42:44,410 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - [-] - mlx-vlm GLM-5.3 (glm5_next) runtime MTP patch applied
+2026-09-15 21:42:44,410 - omlx.utils.model_loading - INFO - [-] - mlx-vlm runtime MTP patch applied for /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp (config declares mtp heads but checkpoint ships no mtp.* weights; MTPModule attachment skipped to keep strict load_weights happy)
+2026-09-15 21:42:44,410 - omlx.engine_core - INFO - [-] - MLX executor thread initialized: generation_stream = ThreadLocalStream(Device(gpu, 0), 4)
+2026-09-15 21:42:44,430 - omlx.patches.mlx_vlm_pixtral_torch_free - INFO - [-] - Pixtral torch-free processor patch installed (mlx-vlm PR #1502 backport + TokenizersBackend pin)
+2026-09-15 21:42:44,431 - omlx.engine.vlm - INFO - [-] - glm5_next pre-quantization sanitize active for GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 21:42:44,581 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - [-] - glm5_next sanitize: no nextn MTP layer in checkpoint
+2026-09-15 21:42:44,612 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - [-] - glm5_next sanitize: no nextn MTP layer in checkpoint
+2026-09-15 21:43:10,790 - omlx.engine.vlm - INFO - [-] - Vision feature cache enabled (SSD: /Users/leedolsen/.omlx/cache/vision_features)
+2026-09-15 21:43:11,237 - omlx.scheduler - INFO - [-] - Loaded 2 additional EOS token(s) from generation_config.json: {154827, 154829}
+2026-09-15 21:43:11,238 - omlx.scheduler - INFO - [-] - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-09-15 21:43:11,240 - omlx.scheduler - INFO - [-] - Decode KV cache materialization interval set to 256 tokens
+2026-09-15 21:43:11,240 - omlx.memory_monitor - INFO - [-] - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-09-15 21:43:11,240 - omlx.scheduler - INFO - [-] - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-09-15 21:43:11,241 - omlx.cache.paged_cache - INFO - [-] - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-09-15 21:43:11,241 - omlx.cache.paged_ssd_cache - INFO - [-] - Scanning SSD cache directory: /Users/leedolsen/.omlx/cache
+2026-09-15 21:43:11,303 - omlx.cache.paged_ssd_cache - INFO - [-] - SSD cache scan complete: scanned=125, indexed=125, errors=0, total_size=82.37 GB, gdn_sidecars=0
+2026-09-15 21:43:11,303 - omlx.cache.paged_ssd_cache - INFO - [-] - PagedSSDCacheManager initialized: dir=/Users/leedolsen/.omlx/cache, max_size=92.00 GB, existing_files=125, disk_free=616.01 GB, cache_used=82.37 GB, incompatible_files=0
+2026-09-15 21:43:11,303 - omlx.cache.paged_cache - INFO - [-] - paged SSD cache manager connected to PagedCacheManager
+2026-09-15 21:43:11,303 - omlx.cache.prefix_cache - INFO - [-] - PagedSSDCacheManager connected to BlockAwarePrefixCache
+2026-09-15 21:43:11,303 - omlx.scheduler - INFO - [-] - paged SSD cache enabled: cache_dir=/Users/leedolsen/.omlx/cache, max_size=92.00 GB, block_size=2048 tokens
+2026-09-15 21:43:11,303 - omlx.scheduler - INFO - [-] - paged SSD cache enabled: /Users/leedolsen/.omlx/cache, block_size=2048, max_blocks=100000
+2026-09-15 21:43:11,304 - omlx.engine_core - INFO - [-] - Engine started
+2026-09-15 21:43:11,304 - omlx.patches.sdpa256_attention - INFO - [-] - sdpa256 attention patch applied (head_dim=256 prefill, kv_len>=8192, force bounded when unfused exceeds guard headroom)
+2026-09-15 21:43:11,308 - omlx.patches.qwen35_gdn_prework - INFO - [-] - Qwen3.5/3.6 fused GDN verify prework patch applied
+2026-09-15 21:43:11,308 - omlx.patches.qwen35_verify_sdpa_split - INFO - [-] - Qwen3.5/3.6 verify-width causal vector attention patch applied
+2026-09-15 21:43:11,308 - omlx.patches.qwen35_gdn_chunked - INFO - [-] - Qwen3.5/3.6 GDN prefill kernel patch applied (Metal, impl=blocked_seq, min_t=64)
+2026-09-15 21:43:11,312 - omlx.patches.qwen35_moe_router - INFO - [-] - Qwen MoE fused router top-k patch applied
+2026-09-15 21:43:11,314 - omlx.patches.qwen35_ragged_decode - INFO - [-] - qwen3_5 ragged decode threadgroup fallback patch applied
+2026-09-15 21:43:11,314 - omlx.cache.paged_ssd_cache - INFO - [-] - PagedSSDCacheManager updated layer cache signature (45 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=yes)
+2026-09-15 21:43:11,340 - omlx.engine.vlm - INFO - [-] - VLM tool calling enabled: parser=glm47
+2026-09-15 21:43:11,342 - omlx.engine.vlm - INFO - [-] - VLMBatchedEngine loaded: /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 21:43:11,352 - omlx.engine_pool - INFO - [-] - Loaded model: GLM-5.3-Flash-oQ6e-mtp (actual: 239.64GB, local estimate: 251.19GB, full model: 251.19GB, total: 251.19GB)
+2026-09-15 21:43:11,631 - omlx.engine.vlm - INFO - [-] - GrammarCompiler initialized for /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 21:43:12,015 - omlx.scheduler - INFO - [-] - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-09-15 21:43:12,016 - omlx.cache.prefix_cache - INFO - [-] - GDN SSD sidecar is unsupported for layout ['ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache']; falling back to embedded GDN snapshots
+2026-09-15 21:43:12,020 - omlx.scheduler - INFO - [-] - Prefix cache restore for 27b1ead6-45d6-4e4e-88ce-59e577472b95: source=paged cached=6144 suffix=100555 blocks=3 lookup=0.669ms reconstruct=3.268ms promote=True
+2026-09-15 21:54:47,125 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 27b1ead6-45d6-4e4e-88ce-59e577472b95: storing 106496/107183 tokens (skipping trailing partial block, 48 intermediate snapshots)
+2026-09-15 21:54:47,133 - omlx.scheduler - INFO - [-] - Cache phase timings: cleanup_finished_sync=0.0ms/1, prefix_cache_lookup=0.7ms/1, prefix_cache_reconstruct=3.3ms/1, store_cache_main_boundary=68.3ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1, store_cache_worker_sync=0.2ms/1
+2026-09-15 21:54:47,142 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 484 tokens in 695.32s (22.6 tok/s), prompt: 106699, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=673.89s, stream_visible_ttft=674.33s
+2026-09-15 21:59:13,174 - omlx.scheduler - INFO - [-] - Prefix cache restore for 603bb885-31e9-47cc-adea-8c0be53a1513: source=paged cached=104448 suffix=3227 blocks=51 lookup=3.769ms reconstruct=86.878ms promote=True
+2026-09-15 22:01:37,840 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 603bb885-31e9-47cc-adea-8c0be53a1513: storing 106496/110253 tokens (skipping trailing partial block, 0 intermediate snapshots)
+2026-09-15 22:01:37,845 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=2.1ms/1, boundary_capture_sync=2.8ms/1, boundary_snapshot_save=263.9ms/1, cleanup_finished_sync=0.1ms/2, prefix_cache_lookup=4.4ms/2, prefix_cache_reconstruct=90.1ms/2, store_cache_main_boundary=130.9ms/2, store_cache_main_collect=0.1ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.2ms/1
+2026-09-15 22:01:37,848 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 2578 tokens in 144.95s (22.9 tok/s), prompt: 107675, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=32.24s, stream_visible_ttft=32.43s
+2026-09-15 22:10:01,809 - omlx.scheduler - INFO - [-] - Prefix cache restore for e17f31be-61c4-4d4b-b176-674843a28d02: source=paged cached=106496 suffix=4352 blocks=52 lookup=3.757ms reconstruct=34.327ms promote=True
+2026-09-15 22:10:01,814 - omlx.scheduler - INFO - [-] - prefix cache: request e17f31be-61c4-4d4b-b176-674843a28d02 re-prefills 4352 of 110848 tokens (reused 106496); closest stored sequence 603bb885-31e9-47cc-adea-8c0be53a1513 shares the first 106496 of 106496 comparable tokens before diverging
+2026-09-15 22:17:05,622 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for e17f31be-61c4-4d4b-b176-674843a28d02: storing 110592/119422 tokens (skipping trailing partial block, 1 intermediate snapshots)
+2026-09-15 22:17:05,626 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=11.2ms/5, boundary_capture_sync=11.0ms/5, boundary_snapshot_save=1212.7ms/5, cleanup_finished_sync=0.1ms/3, prefix_cache_lookup=8.2ms/3, prefix_cache_reconstruct=124.5ms/3, store_cache_main_boundary=193.8ms/3, store_cache_main_collect=0.1ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/2
+2026-09-15 22:17:05,630 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 8574 tokens in 424.05s (22.6 tok/s), prompt: 110848, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=44.73s, stream_visible_ttft=44.92s
+2026-09-15 22:22:01,207 - omlx.scheduler - INFO - [-] - Prefix cache restore for 59203efc-de8f-42ed-b734-3d6ad7cebebb: source=paged cached=110592 suffix=256 blocks=54 lookup=3.726ms reconstruct=36.193ms promote=True
+2026-09-15 22:28:05,882 - omlx.scheduler - INFO - [-] - Skipping cache store for 59203efc-de8f-42ed-b734-3d6ad7cebebb: reason=boundary_snapshot_unavailable tokens=110848 block_size=2048 available_boundaries=4; storing live non-sliceable state would corrupt later prefix hits
+2026-09-15 22:28:05,979 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=20.0ms/9, boundary_capture_sync=21.0ms/9, boundary_snapshot_save=2263.0ms/9, cleanup_finished_sync=0.2ms/4, prefix_cache_lookup=11.9ms/4, prefix_cache_reconstruct=160.7ms/4, store_cache_main_boundary=193.8ms/4, store_cache_main_collect=0.1ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/3
+2026-09-15 22:28:05,988 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 8148 tokens in 365.02s (22.6 tok/s), prompt: 110848, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=5.17s, stream_visible_ttft=5.37s
+2026-09-15 22:32:11,640 - omlx.scheduler - INFO - [-] - Prefix cache restore for c8553c72-48a8-44de-a395-864ae42c4e28: source=paged cached=108544 suffix=11553 blocks=53 lookup=3.895ms reconstruct=34.494ms promote=True
+2026-09-15 22:32:11,646 - omlx.scheduler - INFO - [-] - prefix cache: request c8553c72-48a8-44de-a395-864ae42c4e28 re-prefills 11553 of 120097 tokens (reused 108544); closest stored sequence e17f31be-61c4-4d4b-b176-674843a28d02 shares the first 110548 of 110592 comparable tokens before diverging
+2026-09-15 22:36:41,030 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for c8553c72-48a8-44de-a395-864ae42c4e28: storing 118784/123511 tokens (skipping trailing partial block, 4 intermediate snapshots)
+2026-09-15 22:36:41,035 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=24.2ms/11, boundary_capture_sync=26.5ms/11, boundary_snapshot_save=2866.0ms/11, cleanup_finished_sync=0.2ms/5, prefix_cache_lookup=15.8ms/5, prefix_cache_reconstruct=195.1ms/5, store_cache_main_boundary=262.4ms/5, store_cache_main_collect=0.1ms/4, store_cache_main_dispatch=0.5ms/4, store_cache_worker_sync=0.3ms/3
+2026-09-15 22:36:41,037 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 3414 tokens in 269.66s (22.7 tok/s), prompt: 120097, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=119.12s, stream_visible_ttft=119.32s
+2026-09-15 22:40:04,969 - omlx.admin.routes - INFO - [-] - Burst Decode mode set to 'balanced'
+2026-09-15 22:40:04,970 - omlx.admin.routes - INFO - [-] - Memory guard updated — tier: balanced -> balanced, custom_ceiling: 0.0 GB
+2026-09-15 22:40:04,970 - omlx.process_memory_enforcer - INFO - [-] - Prefill memory guard: enabled
+2026-09-15 22:40:04,971 - omlx.admin.routes - INFO - [-] - Prefill memory guard enabled
+2026-09-15 22:40:04,971 - omlx.admin.routes - INFO - [-] - Chunked prefill disabled
+2026-09-15 22:40:04,971 - omlx.admin.routes - INFO - [-] - Prefill priority set to 'context'
+2026-09-15 22:40:04,971 - omlx.admin.routes - INFO - [-] - Decode fairness enabled
+2026-09-15 22:40:04,971 - omlx.engine_pool - INFO - [-] - Unloading model: GLM-5.3-Flash-oQ6e-mtp (immediate abort)
+2026-09-15 22:40:04,972 - omlx.engine_core - INFO - [-] - Engine stopped
+2026-09-15 22:40:05,004 - omlx.scheduler - INFO - [-] - Scheduler shutdown initiated...
+2026-09-15 22:40:05,008 - omlx.cache.paged_ssd_cache - INFO - [-] - Shutting down PagedSSDCacheManager...
+2026-09-15 22:40:05,009 - omlx.scheduler - INFO - [-] - Scheduler shutdown completed
+2026-09-15 22:40:05,009 - omlx.cache.paged_cache - INFO - [-] - PagedCacheManager cleared (reset to 256 initial blocks)
+2026-09-15 22:40:05,083 - omlx.scheduler - INFO - [-] - Deep reset completed - all caches cleared
+2026-09-15 22:40:07,433 - omlx.engine.vlm - INFO - [-] - VLMBatchedEngine stopped
+2026-09-15 22:40:11,354 - omlx.engine_pool - INFO - [-] - Unloaded model: GLM-5.3-Flash-oQ6e-mtp, freed=241.93GB (expected>=238.63GB), active_memory: 13.50MB (settled)
+2026-09-15 22:40:11,354 - omlx.admin.routes - INFO - [-] - Cache settings updated. Unloaded 1 models.
+2026-09-15 22:40:11,354 - omlx.admin.routes - INFO - [-] - Network settings updated
+2026-09-15 22:40:11,355 - omlx.admin.routes - INFO - [-] - Sampling defaults updated: max_context_window=32768, max_context_window_policy=None, max_tokens=32768, temperature=1.0, top_p=0.95, top_k=0, repetition_penalty=1.0
+2026-09-15 22:40:11,355 - omlx.admin.routes - INFO - [-] - Idle timeout disabled
+2026-09-15 22:40:11,355 - omlx.admin.routes - INFO - [-] - API key updated via admin settings
+2026-09-15 22:40:11,356 - omlx.settings - INFO - [-] - Saved settings to /Users/leedolsen/.omlx/settings.json
+2026-09-15 22:40:11,356 - omlx.admin.routes - INFO - [-] - Embedding batch size set to 32
+2026-09-15 22:41:42,756 - omlx.engine_pool - INFO - [-] - Loading model: GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 22:41:42,761 - omlx.patches.mlx_lm_mtp.nemotron_h_chain - INFO - [-] - nemotron_h MTP chain patch applied (depth-k drafting, sequential fused verify, replay-free rollback)
+2026-09-15 22:41:42,771 - omlx.utils.model_loading - INFO - [-] - mlx-vlm runtime MTP patch applied for /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp (config declares mtp heads but checkpoint ships no mtp.* weights; MTPModule attachment skipped to keep strict load_weights happy)
+2026-09-15 22:41:42,776 - omlx.engine.vlm - INFO - [-] - glm5_next pre-quantization sanitize active for GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 22:41:42,959 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - [-] - glm5_next sanitize: no nextn MTP layer in checkpoint
+2026-09-15 22:41:42,990 - omlx.patches.mlx_vlm_mtp.glm5_next_vlm_runtime - INFO - [-] - glm5_next sanitize: no nextn MTP layer in checkpoint
+2026-09-15 22:42:09,474 - omlx.engine.vlm - INFO - [-] - Vision feature cache enabled (SSD: /Users/leedolsen/.omlx/cache/vision_features)
+2026-09-15 22:42:09,924 - omlx.scheduler - INFO - [-] - Loaded 2 additional EOS token(s) from generation_config.json: {154827, 154829}
+2026-09-15 22:42:09,924 - omlx.scheduler - INFO - [-] - Enlarging paged cache block_size=256 to 2048 for ArraysCache hybrid model (reduces boundary snapshot overhead)
+2026-09-15 22:42:09,924 - omlx.scheduler - INFO - [-] - Decode KV cache materialization interval set to 256 tokens
+2026-09-15 22:42:09,924 - omlx.memory_monitor - INFO - [-] - MemoryMonitor initialized (estimator-only, eviction disabled)
+2026-09-15 22:42:09,924 - omlx.scheduler - INFO - [-] - paged SSD-only mode: max_blocks=100000, block_size=2048 tokens
+2026-09-15 22:42:09,924 - omlx.cache.paged_cache - INFO - [-] - PagedCacheManager initialized: block_size=2048, initial_blocks=256, max_blocks=100000, max_tokens=204800000
+2026-09-15 22:42:09,924 - omlx.cache.paged_ssd_cache - INFO - [-] - Scanning SSD cache directory: /Users/leedolsen/.omlx/cache
+2026-09-15 22:42:09,994 - omlx.cache.paged_ssd_cache - INFO - [-] - SSD cache scan complete: scanned=115, indexed=115, errors=0, total_size=90.99 GB, gdn_sidecars=0
+2026-09-15 22:42:10,051 - omlx.cache.paged_ssd_cache - INFO - [-] - PagedSSDCacheManager initialized: dir=/Users/leedolsen/.omlx/cache, max_size=83.00 GB, existing_files=101, disk_free=615.67 GB, cache_used=82.71 GB, incompatible_files=0
+2026-09-15 22:42:10,051 - omlx.cache.paged_cache - INFO - [-] - paged SSD cache manager connected to PagedCacheManager
+2026-09-15 22:42:10,051 - omlx.cache.prefix_cache - INFO - [-] - PagedSSDCacheManager connected to BlockAwarePrefixCache
+2026-09-15 22:42:10,052 - omlx.scheduler - INFO - [-] - paged SSD cache enabled: cache_dir=/Users/leedolsen/.omlx/cache, max_size=83.00 GB, block_size=2048 tokens
+2026-09-15 22:42:10,052 - omlx.scheduler - INFO - [-] - paged SSD cache enabled: /Users/leedolsen/.omlx/cache, block_size=2048, max_blocks=100000
+2026-09-15 22:42:10,052 - omlx.engine_core - INFO - [-] - Engine started
+2026-09-15 22:42:10,052 - omlx.cache.paged_ssd_cache - INFO - [-] - PagedSSDCacheManager updated layer cache signature (45 layers, 2 unique types, turboquant_kv_bits=None, cachelist_subtypes=yes)
+2026-09-15 22:42:10,077 - omlx.engine.vlm - INFO - [-] - VLM tool calling enabled: parser=glm47
+2026-09-15 22:42:10,079 - omlx.engine.vlm - INFO - [-] - VLMBatchedEngine loaded: /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 22:42:10,090 - omlx.engine_pool - INFO - [-] - Loaded model: GLM-5.3-Flash-oQ6e-mtp (actual: 239.45GB, local estimate: 251.19GB, full model: 251.19GB, total: 251.19GB)
+2026-09-15 22:42:10,294 - omlx.engine.vlm - INFO - [-] - GrammarCompiler initialized for /Volumes/TB5_SSD/llm_models/vogel61/GLM-5.3-Flash-oQ6e-mtp
+2026-09-15 22:42:10,733 - omlx.scheduler - INFO - [-] - Enabled boundary cache snapshots for stateful non-sliceable cache layers
+2026-09-15 22:42:10,738 - omlx.cache.prefix_cache - INFO - [-] - GDN SSD sidecar is unsupported for layout ['ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache', 'ArraysCache', 'ArraysCache', 'CacheList', 'ArraysCache']; falling back to embedded GDN snapshots
+2026-09-15 22:59:35,203 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for a534f27b-8270-4a8d-8818-5d304380f7d8: storing 122880/127879 tokens (skipping trailing partial block, 59 intermediate snapshots)
+2026-09-15 22:59:35,210 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=6.3ms/2, boundary_capture_sync=5.5ms/2, boundary_snapshot_save=613.5ms/2, cleanup_finished_sync=0.0ms/1, prefix_cache_lookup=4.7ms/1, store_cache_main_boundary=75.3ms/1, store_cache_main_collect=0.0ms/1, store_cache_main_dispatch=0.1ms/1, store_cache_worker_sync=0.2ms/1
+2026-09-15 22:59:35,217 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 3794 tokens in 1044.71s (22.6 tok/s), prompt: 124085, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=876.92s, stream_visible_ttft=877.12s
+2026-09-15 23:03:06,988 - omlx.scheduler - INFO - [-] - Prefix cache restore for 8df151d4-1be1-4925-85b2-070872d9789a: source=paged cached=122880 suffix=7960 blocks=60 lookup=4.477ms reconstruct=118.376ms promote=True
+2026-09-15 23:03:06,990 - omlx.scheduler - INFO - [-] - prefix cache: request 8df151d4-1be1-4925-85b2-070872d9789a re-prefills 7960 of 130840 tokens (reused 122880); closest stored sequence a534f27b-8270-4a8d-8818-5d304380f7d8 shares the first 122880 of 122880 comparable tokens before diverging
+2026-09-15 23:08:05,028 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 8df151d4-1be1-4925-85b2-070872d9789a: storing 129024/135512 tokens (skipping trailing partial block, 2 intermediate snapshots)
+2026-09-15 23:08:05,033 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=12.7ms/5, boundary_capture_sync=11.2ms/5, boundary_snapshot_save=1572.9ms/5, cleanup_finished_sync=0.1ms/2, prefix_cache_lookup=9.2ms/2, prefix_cache_reconstruct=118.4ms/1, store_cache_main_boundary=151.9ms/2, store_cache_main_collect=0.1ms/2, store_cache_main_dispatch=0.2ms/2, store_cache_worker_sync=0.2ms/1
+2026-09-15 23:08:05,037 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 4672 tokens in 298.42s (22.3 tok/s), prompt: 130840, finish_reason=tool_calls, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=89.18s, stream_visible_ttft=89.38s
+2026-09-15 23:08:07,179 - omlx.scheduler - INFO - [-] - Prefix cache restore for c959b0ee-7cf0-4443-a405-5b0f3492a736: source=paged cached=129024 suffix=6636 blocks=63 lookup=4.918ms reconstruct=43.366ms promote=True
+2026-09-15 23:08:07,184 - omlx.scheduler - INFO - [-] - prefix cache: request c959b0ee-7cf0-4443-a405-5b0f3492a736 re-prefills 6636 of 135660 tokens (reused 129024); closest stored sequence 8df151d4-1be1-4925-85b2-070872d9789a shares the first 129024 of 129024 comparable tokens before diverging
+2026-09-15 23:09:29,077 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for c959b0ee-7cf0-4443-a405-5b0f3492a736: storing 135168/135716 tokens (skipping trailing partial block, 2 intermediate snapshots)
+2026-09-15 23:09:29,082 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=12.7ms/5, boundary_capture_sync=11.2ms/5, boundary_snapshot_save=1572.9ms/5, cleanup_finished_sync=0.1ms/3, prefix_cache_lookup=14.1ms/3, prefix_cache_reconstruct=161.7ms/2, store_cache_main_boundary=236.5ms/3, store_cache_main_collect=0.1ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/2
+2026-09-15 23:09:29,083 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 56 tokens in 82.21s (21.7 tok/s), prompt: 135660, finish_reason=tool_calls, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=79.62s, stream_visible_ttft=79.82s
+2026-09-15 23:09:34,064 - omlx.scheduler - INFO - [-] - Prefix cache restore for 1cbf14a1-475c-4291-9d2b-85208791e9eb: source=paged cached=135168 suffix=941 blocks=66 lookup=4.838ms reconstruct=44.726ms promote=True
+2026-09-15 23:09:53,695 - omlx.scheduler - INFO - [-] - Skipping cache store for 1cbf14a1-475c-4291-9d2b-85208791e9eb: reason=boundary_snapshot_unavailable tokens=136109 block_size=2048 available_boundaries=0; storing live non-sliceable state would corrupt later prefix hits
+2026-09-15 23:09:53,699 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=12.7ms/5, boundary_capture_sync=11.2ms/5, boundary_snapshot_save=1572.9ms/5, cleanup_finished_sync=0.1ms/4, prefix_cache_lookup=19.0ms/4, prefix_cache_reconstruct=206.5ms/3, store_cache_main_boundary=236.6ms/4, store_cache_main_collect=0.1ms/3, store_cache_main_dispatch=0.3ms/3, store_cache_worker_sync=0.3ms/3
+2026-09-15 23:09:53,703 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 157 tokens in 19.96s (22.6 tok/s), prompt: 136109, finish_reason=tool_calls, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=13.03s, stream_visible_ttft=13.22s
+2026-09-15 23:09:56,413 - omlx.scheduler - INFO - [-] - Prefix cache restore for f6d0ab30-d554-4e86-863c-b54270f0eafb: source=paged cached=135168 suffix=2145 blocks=66 lookup=5.035ms reconstruct=44.297ms promote=True
+2026-09-15 23:14:01,806 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for f6d0ab30-d554-4e86-863c-b54270f0eafb: storing 137216/142175 tokens (skipping trailing partial block, 0 intermediate snapshots)
+2026-09-15 23:14:01,811 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=16.8ms/7, boundary_capture_sync=16.8ms/7, boundary_snapshot_save=2255.1ms/7, cleanup_finished_sync=0.2ms/5, prefix_cache_lookup=24.0ms/5, prefix_cache_reconstruct=250.8ms/4, store_cache_main_boundary=322.4ms/5, store_cache_main_collect=0.1ms/4, store_cache_main_dispatch=0.4ms/4, store_cache_worker_sync=0.3ms/3
+2026-09-15 23:14:01,816 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 4862 tokens in 245.72s (22.4 tok/s), prompt: 137313, finish_reason=tool_calls, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=28.62s, stream_visible_ttft=28.82s
+2026-09-15 23:14:04,393 - omlx.scheduler - INFO - [-] - Prefix cache restore for 1921ce46-f9b1-4832-a05c-8c29164df77a: source=paged cached=137216 suffix=5160 blocks=67 lookup=5.042ms reconstruct=45.663ms promote=True
+2026-09-15 23:14:04,404 - omlx.scheduler - INFO - [-] - prefix cache: request 1921ce46-f9b1-4832-a05c-8c29164df77a re-prefills 5160 of 142376 tokens (reused 137216); closest stored sequence f6d0ab30-d554-4e86-863c-b54270f0eafb shares the first 137216 of 137216 comparable tokens before diverging
+2026-09-15 23:16:09,368 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 1921ce46-f9b1-4832-a05c-8c29164df77a: storing 141312/143713 tokens (skipping trailing partial block, 1 intermediate snapshots)
+2026-09-15 23:16:09,373 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=18.9ms/8, boundary_capture_sync=19.5ms/8, boundary_snapshot_save=2604.7ms/8, cleanup_finished_sync=0.2ms/6, prefix_cache_lookup=29.0ms/6, prefix_cache_reconstruct=296.4ms/5, store_cache_main_boundary=410.1ms/6, store_cache_main_collect=0.1ms/5, store_cache_main_dispatch=0.6ms/5, store_cache_worker_sync=0.4ms/4
+2026-09-15 23:16:09,375 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 1337 tokens in 125.31s (22.4 tok/s), prompt: 142376, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=65.50s, stream_visible_ttft=65.69s
+2026-09-15 23:20:02,276 - omlx.scheduler - INFO - [-] - Prefix cache restore for d8550cd1-c116-48b1-9d43-dd22a7575c2b: source=paged cached=129024 suffix=15647 blocks=63 lookup=4.508ms reconstruct=72.206ms promote=True
+2026-09-15 23:20:02,287 - omlx.scheduler - INFO - [-] - prefix cache: request d8550cd1-c116-48b1-9d43-dd22a7575c2b re-prefills 15647 of 144671 tokens (reused 129024); closest stored sequence c959b0ee-7cf0-4443-a405-5b0f3492a736 shares the first 130540 of 135168 comparable tokens before diverging
+2026-09-15 23:26:09,125 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for d8550cd1-c116-48b1-9d43-dd22a7575c2b: storing 143360/148699 tokens (skipping trailing partial block, 6 intermediate snapshots)
+2026-09-15 23:26:09,130 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=23.1ms/10, boundary_capture_sync=25.1ms/10, boundary_snapshot_save=3328.2ms/10, cleanup_finished_sync=0.2ms/7, prefix_cache_lookup=33.5ms/7, prefix_cache_reconstruct=368.6ms/6, store_cache_main_boundary=496.4ms/7, store_cache_main_collect=0.1ms/6, store_cache_main_dispatch=0.7ms/6, store_cache_worker_sync=0.4ms/5
+2026-09-15 23:26:09,133 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 4028 tokens in 367.20s (22.4 tok/s), prompt: 144671, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=187.39s, stream_visible_ttft=187.59s
+2026-09-15 23:29:11,639 - omlx.scheduler - INFO - [-] - Prefix cache restore for 46af7a63-ead1-42c9-bd56-c96cc604798a: source=paged cached=143360 suffix=7535 blocks=70 lookup=4.847ms reconstruct=45.065ms promote=True
+2026-09-15 23:29:11,649 - omlx.scheduler - INFO - [-] - prefix cache: request 46af7a63-ead1-42c9-bd56-c96cc604798a re-prefills 7535 of 150895 tokens (reused 143360); closest stored sequence d8550cd1-c116-48b1-9d43-dd22a7575c2b shares the first 143360 of 143360 comparable tokens before diverging
+2026-09-15 23:33:40,397 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 46af7a63-ead1-42c9-bd56-c96cc604798a: storing 149504/154738 tokens (skipping trailing partial block, 2 intermediate snapshots)
+2026-09-15 23:33:40,404 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=27.3ms/12, boundary_capture_sync=30.6ms/12, boundary_snapshot_save=4073.3ms/12, cleanup_finished_sync=0.3ms/8, prefix_cache_lookup=38.4ms/8, prefix_cache_reconstruct=413.7ms/7, store_cache_main_boundary=589.6ms/8, store_cache_main_collect=0.2ms/7, store_cache_main_dispatch=0.8ms/7, store_cache_worker_sync=0.5ms/6
+2026-09-15 23:33:40,408 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 3843 tokens in 269.10s (22.3 tok/s), prompt: 150895, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=96.53s, stream_visible_ttft=96.73s
+2026-09-15 23:35:07,343 - omlx.scheduler - INFO - [-] - Prefix cache restore for ad0767bd-caa4-419d-ad1e-69fc5484128d: source=paged cached=149504 suffix=5805 blocks=73 lookup=5.349ms reconstruct=49.128ms promote=True
+2026-09-15 23:35:07,354 - omlx.scheduler - INFO - [-] - prefix cache: request ad0767bd-caa4-419d-ad1e-69fc5484128d re-prefills 5805 of 155309 tokens (reused 149504); closest stored sequence 46af7a63-ead1-42c9-bd56-c96cc604798a shares the first 149504 of 149504 comparable tokens before diverging
+2026-09-15 23:37:36,044 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for ad0767bd-caa4-419d-ad1e-69fc5484128d: storing 153600/156922 tokens (skipping trailing partial block, 1 intermediate snapshots)
+2026-09-15 23:37:36,048 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=29.3ms/13, boundary_capture_sync=33.4ms/13, boundary_snapshot_save=4464.6ms/13, cleanup_finished_sync=0.3ms/9, prefix_cache_lookup=43.7ms/9, prefix_cache_reconstruct=462.8ms/8, store_cache_main_boundary=683.2ms/9, store_cache_main_collect=0.2ms/8, store_cache_main_dispatch=0.9ms/8, store_cache_worker_sync=0.6ms/7
+2026-09-15 23:37:36,053 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 1613 tokens in 149.06s (22.2 tok/s), prompt: 155309, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=76.55s, stream_visible_ttft=76.74s
+2026-09-15 23:40:09,487 - omlx.scheduler - INFO - [-] - Prefix cache restore for cc8110c0-5759-40d1-9078-1c71104b4e5a: source=paged cached=153600 suffix=4551 blocks=75 lookup=5.497ms reconstruct=48.615ms promote=True
+2026-09-15 23:40:09,499 - omlx.scheduler - INFO - [-] - prefix cache: request cc8110c0-5759-40d1-9078-1c71104b4e5a re-prefills 4551 of 158151 tokens (reused 153600); closest stored sequence ad0767bd-caa4-419d-ad1e-69fc5484128d shares the first 153600 of 153600 comparable tokens before diverging
+2026-09-15 23:43:41,388 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for cc8110c0-5759-40d1-9078-1c71104b4e5a: storing 157696/161470 tokens (skipping trailing partial block, 1 intermediate snapshots)
+2026-09-15 23:43:41,394 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=31.4ms/14, boundary_capture_sync=36.1ms/14, boundary_snapshot_save=4851.1ms/14, cleanup_finished_sync=0.3ms/10, prefix_cache_lookup=49.2ms/10, prefix_cache_reconstruct=511.4ms/9, store_cache_main_boundary=773.7ms/10, store_cache_main_collect=0.2ms/9, store_cache_main_dispatch=1.0ms/9, store_cache_worker_sync=0.6ms/8
+2026-09-15 23:43:41,397 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 3319 tokens in 212.25s (22.4 tok/s), prompt: 158151, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=63.93s, stream_visible_ttft=64.13s
+2026-09-15 23:44:50,865 - omlx.cache.prefix_cache - INFO - [-] - Partial cache reconstruction: 75/77 blocks, 153600 tokens
+2026-09-15 23:44:50,887 - omlx.scheduler - INFO - [-] - Prefix cache restore for 72d099e5-ffa7-48f8-8f70-533053261de0: source=paged cached=153600 suffix=8431 blocks=75 lookup=5.838ms reconstruct=53.101ms promote=True
+2026-09-15 23:44:50,900 - omlx.scheduler - INFO - [-] - prefix cache: request 72d099e5-ffa7-48f8-8f70-533053261de0 re-prefills 8431 of 162031 tokens (reused 153600); closest stored sequence cc8110c0-5759-40d1-9078-1c71104b4e5a shares the first 157696 of 157696 comparable tokens before diverging
+2026-09-15 23:47:08,158 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 72d099e5-ffa7-48f8-8f70-533053261de0: storing 161792/162496 tokens (skipping trailing partial block, 3 intermediate snapshots)
+2026-09-15 23:47:08,166 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=31.4ms/14, boundary_capture_sync=36.1ms/14, boundary_snapshot_save=4851.1ms/14, cleanup_finished_sync=0.4ms/11, prefix_cache_lookup=55.0ms/11, prefix_cache_reconstruct=564.5ms/10, store_cache_main_boundary=865.9ms/11, store_cache_main_collect=0.2ms/10, store_cache_main_dispatch=1.1ms/10, store_cache_worker_sync=0.7ms/9
+2026-09-15 23:47:08,168 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 465 tokens in 137.65s (22.5 tok/s), prompt: 162031, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=116.94s, stream_visible_ttft=117.14s
+2026-09-15 23:49:40,285 - omlx.cache.prefix_cache - INFO - [-] - Partial cache reconstruction: 75/78 blocks, 153600 tokens
+2026-09-15 23:49:40,304 - omlx.scheduler - INFO - [-] - Prefix cache restore for 82ae4672-1a03-48f8-8d1f-c7252081296d: source=paged cached=153600 suffix=9495 blocks=75 lookup=5.794ms reconstruct=48.897ms promote=True
+2026-09-15 23:49:40,317 - omlx.scheduler - INFO - [-] - prefix cache: request 82ae4672-1a03-48f8-8d1f-c7252081296d re-prefills 9495 of 163095 tokens (reused 153600); closest stored sequence 72d099e5-ffa7-48f8-8f70-533053261de0 shares the first 161731 of 161792 comparable tokens before diverging
+2026-09-15 23:58:29,077 - omlx.scheduler - INFO - [-] - Using boundary cache snapshot for 82ae4672-1a03-48f8-8d1f-c7252081296d: storing 161792/171974 tokens (skipping trailing partial block, 3 intermediate snapshots)
+2026-09-15 23:58:29,082 - omlx.scheduler - INFO - [-] - Cache phase timings: boundary_capture_extract=39.6ms/18, boundary_capture_sync=47.2ms/18, boundary_snapshot_save=6450.3ms/18, cleanup_finished_sync=0.4ms/12, prefix_cache_lookup=60.8ms/12, prefix_cache_reconstruct=613.4ms/11, store_cache_main_boundary=957.1ms/12, store_cache_main_collect=0.2ms/11, store_cache_main_dispatch=1.2ms/11, store_cache_worker_sync=0.7ms/10
+2026-09-15 23:58:29,086 - omlx.server - INFO - [-] - Chat completion: model=GLM-5.3-Flash-oQ6e-mtp, 8879 tokens in 529.14s (22.2 tok/s), prompt: 163095, finish_reason=stop, max_tokens=32000, request_max_tokens=32000, stream_model_ttft=129.46s, stream_visible_ttft=129.67s
