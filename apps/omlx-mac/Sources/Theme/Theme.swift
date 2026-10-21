@@ -7,6 +7,23 @@
 
 import SwiftUI
 
+extension Color {
+    /// Initialize from a 0xRRGGBB hex value.
+    init(hex: UInt32) {
+        let r = Double((hex >> 16) & 0xFF) / 255.0
+        let g = Double((hex >> 8) & 0xFF) / 255.0
+        let b = Double(hex & 0xFF) / 255.0
+        self.init(red: r, green: g, blue: b)
+    }
+}
+
+// MARK: - Enhanced Readability (global)
+
+/// Persisted preference key for the Enhanced Readability toggle.
+enum EnhancedReadability {
+    static let enabledKey = "OMLXEnhancedReadability"
+}
+
 // MARK: - Token table
 
 struct OMLXTheme: Sendable {
@@ -26,8 +43,8 @@ struct OMLXTheme: Sendable {
 
     // Text
     let text: Color
-    let textSecondary: Color
-    let textTertiary: Color
+    var textSecondary: Color
+    var textTertiary: Color
 
     // Accent + selection
     let accent: Color
@@ -48,13 +65,13 @@ struct OMLXTheme: Sendable {
     // Status
     let greenDot: Color
     let amberDot: Color
-    let redDot: Color
+    var redDot: Color
     let blueDot: Color
 
     // Code + status backgrounds
     let codeBg: Color
     let warningBg: Color
-    let warningText: Color
+    var warningText: Color
     let successBg: Color
     let successText: Color
 
@@ -71,6 +88,18 @@ struct OMLXTheme: Sendable {
 }
 
 extension OMLXTheme {
+    static func resolved(for scheme: ColorScheme, enhancedReadability: Bool) -> OMLXTheme {
+        var theme = scheme == .dark ? dark : light
+        if enhancedReadability {
+            theme.textSecondary = theme.text
+            theme.textTertiary = theme.text
+            let danger = Color(hex: scheme == .dark ? 0xef5b54 : 0xd92d20)
+            theme.redDot = danger
+            theme.warningText = danger
+        }
+        return theme
+    }
+
     static let light = OMLXTheme(
         isDark: false,
         windowBg: systemWindowBgLight,
@@ -249,15 +278,17 @@ extension EnvironmentValues {
 
 private struct OMLXThemeBinder: ViewModifier {
     @Environment(\.colorScheme) private var scheme
+    @AppStorage(EnhancedReadability.enabledKey) private var enhancedReadability = false
+
     func body(content: Content) -> some View {
-        content.environment(\.omlxTheme, scheme == .dark ? .dark : .light)
+        content.environment(\.omlxTheme, .resolved(
+            for: scheme, enhancedReadability: enhancedReadability
+        ))
     }
 }
 
 extension View {
-    /// Resolves `\.omlxTheme` from the current `\.colorScheme`. Apply once at
-    /// the AppView shell (PR 6) so every descendant primitive reads the right
-    /// palette without explicit prop-drilling.
+    /// Applies the current appearance and saved readability preference to child views.
     func omlxThemed() -> some View { modifier(OMLXThemeBinder()) }
 }
 
@@ -314,5 +345,26 @@ extension Font {
     /// Monospaced (SF Mono fallback chain).
     static func omlxMono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
         .system(size: size, weight: weight, design: .monospaced)
+    }
+}
+
+// MARK: - Type ramp
+
+/// Font sizes for `.omlxText`, `.omlxMono` and `.omlxDisplay`.
+/// Each step is the point size of the macOS text style it is named after.
+enum DesignTokens {
+    enum FontSize {
+        /// Footnote, caption 1 and caption 2.
+        static let caption: CGFloat = 10
+        static let subheadline: CGFloat = 11
+        static let callout: CGFloat = 12
+        /// Body and headline.
+        static let body: CGFloat = 13
+        static let title3: CGFloat = 15
+        static let title2: CGFloat = 17
+        static let title1: CGFloat = 22
+        static let largeTitle: CGFloat = 26
+        /// Welcome hero. No macOS text style is this large.
+        static let hero: CGFloat = 48
     }
 }

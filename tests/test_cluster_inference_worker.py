@@ -2,22 +2,30 @@
 """Fail-closed validation of the model stage loaded by a cluster rank."""
 
 import contextlib
+import inspect
 import json
 import os
+import re
 import signal
+import subprocess
 import sys
+import textwrap
 import threading
-import time
 from types import SimpleNamespace
 from typing import Any
 
+import mlx_lm.server as mlx_server
 import pytest
+from mlx_lm.generate import DEFAULT_QUANTIZED_KV_START
+from mlx_lm.tokenizer_utils import TokenizerWrapper
+from mlx_lm.tool_parsers import json_tools, qwen3_coder
 
 import omlx.cluster.inference_worker as inference_worker
 from omlx.cluster.inference_worker import (
     _bind_generation_thread_stream,
     _cross_thread_generation_stream,
     _execution_settings,
+    _exit_on_generation_failure,
     _install_distributed_model_protocol,
     _server_arguments,
     _validate_loaded_stage,
@@ -171,6 +179,21 @@ def test_distributed_minimax_protocol_replaces_generic_tool_and_thinking_markers
     assert parsed == {"name": "get_weather", "arguments": {"city": "Paris"}}
 
 
+def test_distributed_protocol_repairs_json_tools_label(tmp_path):
+    tokenizer = TokenizerWrapper.__new__(TokenizerWrapper)
+    tokenizer._tokenizer = SimpleNamespace(
+        chat_template="<tool_call>\n<function=",
+        encode=lambda text, **kwargs: list(text.encode()),
+    )
+    tokenizer._chat_template = None
+    tokenizer._tool_parser = json_tools.parse_tool_call
+    tokenizer._tool_call_start = "<tool_call>"
+    tokenizer._tool_call_end = "</tool_call>"
+
+    assert _install_distributed_model_protocol(tokenizer, tmp_path) == ""
+    assert tokenizer.tool_parser is qwen3_coder.parse_tool_call
+
+
 def test_distributed_protocol_leaves_other_model_families_untouched(tmp_path):
     model = tmp_path / "llama"
     model.mkdir()
@@ -238,6 +261,119 @@ def _model(*, start=2, end=5, layers=None):
     )
 
 
+def test_cluster_mtp_runs_only_with_every_rank_in_its_role():
+    class Votes:
+        def __init__(self, total):
+            self.total = total
+
+        def item(self):
+            return self.total
+
+    def fake_mx(total):
+        return SimpleNamespace(
+            cpu="cpu",
+            array=int,
+            distributed=SimpleNamespace(all_sum=lambda vote, **_: Votes(total)),
+        )
+
+    def rank_zero(calls):
+        return SimpleNamespace(
+            language_model=SimpleNamespace(
+                _omlx_mtp_decode_enabled=True,
+                mtp=object(),
+                configure_mtp=calls.append,
+            )
+        )
+
+    group = SimpleNamespace(size=lambda: 2)
+    calls = []
+    ready = rank_zero(calls)
+    sync = inference_worker._arm_cluster_mtp(ready, group, 0, fake_mx(2))
+    assert sync.is_leader and ready._omlx_cluster_mtp is sync
+    # A peer short of its role turns MTP off on every rank.
+    lost = rank_zero(calls)
+    assert inference_worker._arm_cluster_mtp(lost, group, 0, fake_mx(1)) is None
+    assert calls == [False]
+    assert not lost.language_model._omlx_mtp_decode_enabled
+    assert not hasattr(lost, "_omlx_cluster_mtp")
+
+
+def test_cluster_mtp_sees_the_sampling_a_request_asked_for():
+    from omlx.patches.mlx_lm_mtp import batch_generator as bg
+
+    args = SimpleNamespace(
+        sampling=SimpleNamespace(
+            temperature=1.0,
+            top_p=0.95,
+            top_k=20,
+            min_p=0.0,
+            xtc_probability=0.0,
+            xtc_threshold=0.0,
+        )
+    )
+    tokenizer = SimpleNamespace(encode=lambda text: [10], eos_token_ids={2})
+    original = mlx_server.make_sampler
+
+    with inference_worker._sample_with_stated_parameters(mlx_server):
+        sampler = mlx_server._make_sampler(args, tokenizer)
+    batch = SimpleNamespace(samplers=[sampler], fallback_sampler=None)
+    assert not bg._is_greedy(batch)
+    assert (sampler.temp, sampler.top_p, sampler.top_k) == (1.0, 0.95, 20)
+    assert mlx_server.make_sampler is original
+
+
+def test_rank_keeps_gpu_warm_while_serving_and_after_until_idle_window():
+    ticks = threading.Semaphore(0)
+
+    class FakeMx:
+        gpu = "gpu"
+        float32 = "float32"
+
+        def new_stream(self, device):
+            return device
+
+        @contextlib.contextmanager
+        def stream(self, _stream):
+            yield
+
+        def zeros(self, _shape, dtype):
+            return 0
+
+        def eval(self, _value):
+            ticks.release()
+
+    active = [1]
+    now = [0.0]
+    telemetry = SimpleNamespace(active_request_count=lambda: active[0])
+
+    def drained() -> bool:
+        while ticks.acquire(timeout=0.05):
+            pass
+        return not ticks.acquire(timeout=0.05)
+
+    with inference_worker._keep_rank_gpu_warm(
+        FakeMx(),
+        telemetry,
+        interval=0.001,
+        idle_window=10.0,
+        clock=lambda: now[0],
+    ):
+        # A pipeline stage idles while its peers compute, so requests in
+        # flight do not suppress the ticks.
+        assert ticks.acquire(timeout=2)
+        active[0] = 0
+        now[0] = 5.0
+        assert ticks.acquire(timeout=2)
+        now[0] = 20.0
+        assert drained()
+        active[0] = 1
+        assert ticks.acquire(timeout=2)
+
+    assert not any(
+        thread.name == "omlx-cluster-gpu-keep-warm" for thread in threading.enumerate()
+    )
+
+
 def test_loaded_stage_matches_approved_unequal_range():
     _validate_loaded_stage(_model(), _assignment())
 
@@ -283,6 +419,7 @@ def test_launcher_watchdog_records_reason_and_exits_reparented_rank():
     updates: list[tuple[str, dict]] = []
     events: list[dict] = []
     exit_codes: list[int] = []
+    aborts: list[str] = []
     releases: list[str] = []
     marker = SimpleNamespace(
         update=lambda phase, **extra: updates.append((phase, extra))
@@ -295,6 +432,7 @@ def test_launcher_watchdog_records_reason_and_exits_reparented_rank():
         wait=lambda _seconds: None,
         exit_process=exit_codes.append,
         emit_event=events.append,
+        on_abort=aborts.append,
         release_memory=releases.append,
     )
 
@@ -309,11 +447,38 @@ def test_launcher_watchdog_records_reason_and_exits_reparented_rank():
             },
         )
     ]
+    # The abort stage ran before the exit stage.
+    assert len(aborts) == 1
     assert events[0]["type"] == "launcher_lost"
     # The Metal release runs before the exit: os._exit skips every
     # finally/atexit handler, so a skipped release orphans wired memory.
     assert len(releases) == 1
     assert exit_codes == [1]
+
+
+def test_dead_generation_thread_records_reason_and_exits_rank():
+    updates: list[tuple[str, dict]] = []
+    events: list[dict] = []
+    calls: list[str] = []
+    marker = SimpleNamespace(
+        update=lambda phase, **extra: updates.append((phase, extra))
+    )
+    error = "AttributeError: 'SimpleNamespace' object has no attribute 'kv_bits'"
+
+    _exit_on_generation_failure(
+        marker,
+        0,
+        error,
+        emit_event=events.append,
+        release_memory=lambda _reason: calls.append("release"),
+        exit_process=lambda code: calls.append(f"exit {code}"),
+    )
+
+    reason = f"rank 0 generation thread died: {error}"
+    assert updates == [("failed", {"error": reason})]
+    # The supervisor turns any event with a reason into the job failure.
+    assert events == [{"type": "generation_failed", "reason": reason}]
+    assert calls == ["release", "exit 1"]
 
 
 def test_worker_execution_contract_reaches_mlx_lm_and_runtime_optimizations():
@@ -371,6 +536,33 @@ def test_worker_execution_contract_reaches_mlx_lm_and_runtime_optimizations():
     assert server.pipeline is True
 
     assert _server_arguments(args, tensor_parallel_size=2).pipeline is False
+
+
+def test_server_arguments_cover_every_cli_arg_mlx_lm_server_reads():
+    # A missing attribute kills the rank's generation thread on its first
+    # request, long after the model loaded.
+    args = build_parser().parse_args(
+        [
+            "--model",
+            "org/model",
+            "--backend",
+            "ring",
+            "--port",
+            "32000",
+            "--deployment-id",
+            "dep",
+            "--plan-hash",
+            "a" * 64,
+            "--plan",
+            "{}",
+        ]
+    )
+    server = _server_arguments(args)
+    read = set(re.findall(r"cli_args\.(\w+)", inspect.getsource(mlx_server)))
+
+    assert read - set(vars(server)) == set()
+    assert server.kv_bits is None
+    assert server.quantized_kv_start == DEFAULT_QUANTIZED_KV_START
 
 
 # ---------------------------------------------------------------------------
@@ -675,7 +867,7 @@ def _run_rank(
         pipeline_index, "apply_mlx_lm_pipeline_index_patch", lambda: None
     )
     monkeypatch.setattr(
-        model_loading, "maybe_apply_pre_load_patches", lambda _model: None
+        model_loading, "maybe_apply_pre_load_patches", lambda _model, _settings: None
     )
     monkeypatch.setattr(
         inference_worker,
@@ -738,6 +930,8 @@ def _run_rank(
         "decode_worker_path_map",
         lambda _plan: {},
     )
+    # Likewise its stage links: none, so ranks keep MLX's own send and receive.
+    monkeypatch.setattr(inference_worker, "decode_worker_stage_links", lambda _plan: ())
 
     def fake_guard_rank_load(item, *, rank, **kwargs):
         record["order"].append("guard")
@@ -778,7 +972,7 @@ def _run_rank(
 
     @contextlib.contextmanager
     def fake_telemetry(_marker, **_kwargs):
-        yield SimpleNamespace()
+        yield SimpleNamespace(active_request_count=lambda: 0)
 
     monkeypatch.setattr(inference_worker, "install_server_telemetry", fake_telemetry)
 
@@ -1213,103 +1407,6 @@ def test_the_marker_is_removed_when_the_rank_exits_cleanly(monkeypatch, tmp_path
     assert list(tmp_path.glob("*.json")) == []
 
 
-def test_launcher_watchdog_fires_on_a_stale_launcher_lease(tmp_path):
-    updates: list[tuple[str, dict]] = []
-    events: list[dict] = []
-    exit_codes: list[int] = []
-    aborts: list[str] = []
-    releases: list[str] = []
-    marker = SimpleNamespace(
-        update=lambda phase, **extra: updates.append((phase, extra))
-    )
-    lease = tmp_path / "launcher-lease.json"
-    lease.write_text("{}", encoding="utf-8")
-    stale = time.time() - 120.0
-    os.utime(lease, (stale, stale))
-
-    _watch_launcher_parent(
-        42,
-        marker,
-        watched_marker_path=lease,
-        marker_stale_after=45.0,
-        get_parent_pid=lambda: 42,
-        wait=lambda _seconds: None,
-        exit_process=exit_codes.append,
-        emit_event=events.append,
-        on_abort=aborts.append,
-        release_memory=releases.append,
-    )
-
-    assert updates[0][0] == "launcher_lost"
-    assert "stale" in updates[0][1]["error"]
-    # The abort stage ran before the exit stage.
-    assert len(aborts) == 1
-    assert events[0]["type"] == "launcher_lost"
-    assert len(releases) == 1
-    assert exit_codes == [1]
-
-
-def test_launcher_watchdog_ignores_a_fresh_lease(tmp_path):
-    exit_codes: list[int] = []
-    marker = SimpleNamespace(update=lambda phase, **extra: None)
-    lease = tmp_path / "launcher-lease.json"
-    lease.write_text("{}", encoding="utf-8")
-
-    polls = [0]
-
-    class StopLoopError(Exception):
-        pass
-
-    def wait(_seconds):
-        polls[0] += 1
-        if polls[0] >= 3:
-            raise StopLoopError
-
-    with pytest.raises(StopLoopError):
-        _watch_launcher_parent(
-            42,
-            marker,
-            watched_marker_path=lease,
-            marker_stale_after=45.0,
-            get_parent_pid=lambda: 42,
-            wait=wait,
-            exit_process=exit_codes.append,
-            emit_event=lambda _event: None,
-        )
-
-    assert exit_codes == []
-
-
-def test_launcher_watchdog_ignores_a_lease_that_never_appeared(tmp_path):
-    exit_codes: list[int] = []
-    marker = SimpleNamespace(update=lambda phase, **extra: None)
-    missing = tmp_path / "not-yet-created-lease.json"
-
-    polls = [0]
-
-    class StopLoopError(Exception):
-        pass
-
-    def wait(_seconds):
-        polls[0] += 1
-        if polls[0] >= 3:
-            raise StopLoopError
-
-    with pytest.raises(StopLoopError):
-        _watch_launcher_parent(
-            42,
-            marker,
-            watched_marker_path=missing,
-            marker_stale_after=45.0,
-            get_parent_pid=lambda: 42,
-            wait=wait,
-            exit_process=exit_codes.append,
-            emit_event=lambda _event: None,
-        )
-
-    assert exit_codes == []
-
-
 def test_cancel_request_file_matches_the_telemetry_contract(tmp_path):
     _write_cancel_request(
         str(tmp_path), "dep-9", "peer watchdog test", plan_hash="e" * 64
@@ -1642,9 +1739,67 @@ def test_install_thinking_budget_support_appends_processor_per_request():
     assert server.ResponseGenerator._tokenize is FakeResponseGenerator._tokenize
 
 
+def test_install_thinking_budget_support_does_not_need_the_http_stack():
+    """CUDA worker venvs ship without FastAPI (#3519), so the rank's budget hook
+    must not import it. Run in a fresh interpreter where the HTTP stack cannot be
+    imported, because this test process already has FastAPI loaded."""
+    script = textwrap.dedent(
+        """
+        import importlib.abc
+        import sys
+
+        HTTP_STACK = {"fastapi", "starlette", "sse_starlette", "uvicorn"}
+
+
+        class NoHttpStack(importlib.abc.MetaPathFinder):
+            def find_spec(self, name, path=None, target=None):
+                if name.partition(".")[0] in HTTP_STACK:
+                    raise ModuleNotFoundError(f"No module named {name!r}", name=name)
+                return None
+
+
+        sys.meta_path.insert(0, NoHttpStack())
+
+        from omlx.cluster import inference_worker
+
+
+        class Tokenizer:
+            think_end_id = 55
+            think_start_id = 54
+            unk_token_id = 0
+
+
+        class ResponseGenerator:
+            def _tokenize(self, tokenizer, request, args):
+                return [54], [[54]], ["assistant"], "reasoning"
+
+
+        class Server:
+            ResponseGenerator = ResponseGenerator
+
+            @staticmethod
+            def _make_logits_processors(args):
+                return []
+
+
+        with inference_worker._install_thinking_budget_support(Server(), Tokenizer()):
+            pass
+        loaded = sorted(m for m in sys.modules if m.partition(".")[0] in HTTP_STACK)
+        assert not loaded, loaded
+        """
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr[-2000:]
+
+
 def test_thinking_close_pattern_and_utf8_piece_match_scheduler_rules():
     class Tokenizer:
-        chat_template = r"{{ '\n</think>\n\n' }}"
+        chat_template = r"{%- if '</think>' in content %}{{ '\n</think>\n\n' }}"
 
         def encode(self, text, add_special_tokens=False):
             return {"\n": [10], "\n\n": [11, 12]}[text]

@@ -11,6 +11,8 @@ import json
 import pytest
 from pydantic import ValidationError
 
+from omlx.api.anthropic_models import MessagesRequest as AnthropicMessagesRequest
+from omlx.api.audio_models import AudioSpeechRequest
 from omlx.api.openai_models import (
     AssistantMessage,
     ChatCompletionChoice,
@@ -33,6 +35,7 @@ from omlx.api.openai_models import (
     ToolDefinition,
     Usage,
 )
+from omlx.api.responses_models import ResponsesRequest
 
 
 class TestContentPart:
@@ -501,6 +504,50 @@ class TestChatCompletionRequest:
         assert data["model"] == "gpt-4"
         assert data["messages"][0]["role"] == "user"
 
+    def test_top_level_enable_thinking_normalizes_to_template_kwargs(self):
+        """Top-level compatibility input must reach the template renderer."""
+        req = ChatCompletionRequest(
+            model="reasoning-model",
+            messages=[Message(role="user", content="Hello")],
+            enable_thinking=False,
+            thinking_budget=0,
+            chat_template_kwargs={"reasoning_effort": "low"},
+        )
+
+        assert req.enable_thinking is False
+        assert req.thinking_budget == 0
+        assert req.chat_template_kwargs == {
+            "enable_thinking": False,
+            "reasoning_effort": "low",
+        }
+
+    @pytest.mark.parametrize("enabled", [True, False])
+    def test_matching_thinking_alias_preserves_input(self, enabled):
+        template_kwargs = {"enable_thinking": enabled, "custom": "value"}
+        request = ChatCompletionRequest(
+            model="test", messages=[], enable_thinking=enabled,
+            chat_template_kwargs=template_kwargs,
+        )
+        assert request.chat_template_kwargs == template_kwargs
+        assert template_kwargs == {"enable_thinking": enabled, "custom": "value"}
+
+    def test_nested_thinking_without_alias_is_unchanged(self):
+        request = ChatCompletionRequest(
+            model="test", messages=[], chat_template_kwargs={"enable_thinking": False}
+        )
+        assert request.enable_thinking is None
+        assert request.chat_template_kwargs == {"enable_thinking": False}
+
+    def test_top_level_enable_thinking_rejects_nested_conflict(self):
+        """Conflicting control paths must fail instead of choosing silently."""
+        with pytest.raises(ValidationError, match="enable_thinking conflicts"):
+            ChatCompletionRequest(
+                model="reasoning-model",
+                messages=[Message(role="user", content="Hello")],
+                enable_thinking=False,
+                chat_template_kwargs={"enable_thinking": True},
+            )
+
     def test_xtc_defaults_to_none(self):
         """Test XTC params default to None (not sent by client)."""
         req = ChatCompletionRequest(
@@ -753,6 +800,15 @@ class TestCompletionModels:
                 }
             )
 
+    def test_ngram_window_shorter_than_ngram_is_rejected(self):
+        fields = {"no_repeat_ngram_size": 35, "ngram_window": 34}
+        with pytest.raises(ValidationError):
+            ChatCompletionRequest.model_validate(
+                {"model": "m", "messages": [{"role": "user", "content": "hi"}]} | fields
+            )
+        with pytest.raises(ValidationError):
+            CompletionRequest.model_validate({"model": "m", "prompt": "hi"} | fields)
+
     def test_completion_request(self):
         """Test creating completion request."""
         req = CompletionRequest(
@@ -908,3 +964,25 @@ class TestStopCoercion:
             stop=["a"],
         )
         assert req.stop == ["a"]
+
+
+_USER_MESSAGES = [{"role": "user", "content": "hi"}]
+
+
+@pytest.mark.parametrize(
+    ("model_cls", "payload"),
+    [
+        (ChatCompletionRequest, {"messages": _USER_MESSAGES, "max_tokens": 0}),
+        (
+            ChatCompletionRequest,
+            {"messages": _USER_MESSAGES, "max_completion_tokens": -1},
+        ),
+        (CompletionRequest, {"prompt": "hi", "max_tokens": -1}),
+        (AnthropicMessagesRequest, {"messages": _USER_MESSAGES, "max_tokens": 0}),
+        (ResponsesRequest, {"input": "hi", "max_output_tokens": -1}),
+        (AudioSpeechRequest, {"input": "hi", "max_tokens": 0}),
+    ],
+)
+def test_output_token_caps_must_be_positive(model_cls, payload):
+    with pytest.raises(ValidationError):
+        model_cls.model_validate({"model": "m", **payload})

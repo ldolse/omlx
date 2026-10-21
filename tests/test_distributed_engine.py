@@ -17,6 +17,7 @@ from omlx.engine.distributed import (
     DistributedBatchedEngine,
     DistributedInferenceError,
 )
+from omlx.exceptions import InvalidRequestError
 
 
 def _deployment() -> ClusterDeployment:
@@ -42,8 +43,8 @@ class _Tokenizer:
         return list(text.encode())
 
 
-def _ready_engine(handler) -> DistributedBatchedEngine:
-    engine = DistributedBatchedEngine(_deployment())
+def _ready_engine(handler, **engine_kwargs) -> DistributedBatchedEngine:
+    engine = DistributedBatchedEngine(_deployment(), **engine_kwargs)
     engine._loaded = True
     engine._tokenizer = _Tokenizer()
     engine._client = httpx.AsyncClient(
@@ -424,6 +425,45 @@ def test_model_thinking_budget_is_supported_by_distributed_engine():
     )
 
     engine._validate_model_settings()
+
+
+def test_qwen35_ane_prefill_rejected_by_distributed_engine():
+    # ANE-prefill settings are never forwarded to cluster workers, so without
+    # this gate the flag silently no-ops instead of erroring — a user could
+    # believe ANE is active on a cluster deployment and get nothing.
+    engine = DistributedBatchedEngine(
+        _deployment(),
+        model_settings=SimpleNamespace(qwen35_ane_prefill_enabled=True),
+    )
+
+    with pytest.raises(ValueError, match="qwen35_ane_prefill_enabled"):
+        engine._validate_model_settings()
+
+
+def test_model_lightning_mtp_runs_only_when_the_plan_holds_the_head():
+    planned = replace(
+        _deployment(), execution=replace(execution_profile("balanced"), mtp=True)
+    )
+    settings = SimpleNamespace(
+        mtp_enabled=True, mtp_fixed_depth=None, mtp_adaptive_max_depth=4
+    )
+
+    engine = DistributedBatchedEngine(planned, model_settings=settings)
+    engine._validate_model_settings()
+    execution = engine._supervisor.deployment.execution
+    assert (execution.mtp, execution.mtp_depth, execution.mtp_fixed_depth) == (
+        True,
+        4,
+        False,
+    )
+    # Turned off in the model settings, the planned head stays unused.
+    off = DistributedBatchedEngine(
+        planned, model_settings=SimpleNamespace(mtp_enabled=False)
+    )
+    assert not off._supervisor.deployment.execution.mtp
+    # A plan without room for the head cannot run it.
+    unplanned = DistributedBatchedEngine(_deployment(), model_settings=settings)
+    assert not unplanned._supervisor.deployment.execution.mtp
 
 
 @pytest.mark.asyncio
@@ -1287,3 +1327,119 @@ async def test_preflight_fails_open_when_the_probe_itself_breaks(monkeypatch):
         await engine.preflight_chat([{"role": "user", "content": "hi"}])
     finally:
         await engine._client.aclose()
+
+
+@pytest.mark.asyncio
+async def test_preflight_refuses_media_for_a_vision_checkpoint(monkeypatch):
+    engine = _ready_engine(lambda request: httpx.Response(200), vision_checkpoint=True)
+    monkeypatch.setattr(engine._supervisor, "status", _healthy_supervisor_status)
+    monkeypatch.setattr(
+        distributed,
+        "check_peers",
+        lambda hosts, **kwargs: (SimpleNamespace(healthy=True),),
+    )
+    image = {"type": "image_url", "image_url": {"url": "data:image/png;base64,AA"}}
+    try:
+        # The parts must reach the engine, or the API layer drops them silently.
+        assert engine.accepts_image_input is True
+        with pytest.raises(InvalidRequestError, match="text model only"):
+            await engine.preflight_chat(
+                [{"role": "user", "content": [{"type": "text", "text": "hi"}, image]}]
+            )
+        await engine.preflight_chat([{"role": "user", "content": "hi"}])
+    finally:
+        await engine._client.aclose()
+
+
+def test_failed_runtime_quiescence_evidence(tmp_path, monkeypatch):
+    """A failed runtime or dead rank process must report 0 active requests."""
+    engine = _ready_engine(lambda request: httpx.Response(200))
+    engine._supervisor.state_dir = str(tmp_path)
+    marker_path = tmp_path / "engine-test-rank-0.json"
+    marker_path.write_text(
+        json.dumps(
+            {
+                "pid": 99999999,
+                "metrics": {"active_requests": 3},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    # Marker exists with active_requests=3, but pid is dead
+    monkeypatch.setattr(distributed, "marker_owner_is_live", lambda m: False)
+    assert engine.rank_side_active_requests() == 0
+
+    # If pid is live, it reports active_requests
+    monkeypatch.setattr(distributed, "marker_owner_is_live", lambda m: True)
+    assert engine.rank_side_active_requests() == 3
+
+    # If marker has an error, it reports 0
+    marker_path.write_text(
+        json.dumps(
+            {
+                "pid": 1234,
+                "error": "Metal GPU watchdog timeout",
+                "metrics": {"active_requests": 3},
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert engine.rank_side_active_requests() == 0
+
+    # If runtime_failed_reason is set on engine, rank_side_active_requests is 0
+    # and has_active_requests is False even if local counter or marker is positive
+    marker_path.write_text(
+        json.dumps(
+            {
+                "pid": 1234,
+                "metrics": {"active_requests": 3},
+            }
+        ),
+        encoding="utf-8",
+    )
+    engine._active_requests = 2
+    assert engine.has_active_requests() is True
+    assert engine.rank_side_active_requests() == 3
+
+    engine._mark_runtime_failed("worker terminated unexpectedly")
+    assert engine.rank_side_active_requests() == 0
+    assert engine.has_active_requests() is False
+
+
+def test_stale_marker_reports_zero_rank_side_active_requests(tmp_path, monkeypatch):
+    """A stale rank marker (> 45s old) must report 0 rank-side active requests."""
+    from datetime import UTC, datetime, timedelta
+
+    engine = _ready_engine(lambda request: httpx.Response(200))
+    engine._supervisor.state_dir = str(tmp_path)
+    marker_path = tmp_path / "engine-test-rank-0.json"
+    old_time = (datetime.now(UTC) - timedelta(seconds=120)).isoformat()
+    marker_path.write_text(
+        json.dumps(
+            {
+                "pid": 1234,
+                "metrics": {"active_requests": 3},
+                "updated_at": old_time,
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(distributed, "marker_owner_is_live", lambda m: True)
+
+    assert engine.rank_side_active_requests() == 0
+
+
+
+
+@pytest.mark.asyncio
+async def test_local_stop_passes_scope_to_supervisor(monkeypatch):
+    engine = _ready_engine(lambda request: httpx.Response(200, json={}))
+    calls = []
+    monkeypatch.setattr(
+        engine._supervisor, "stop", lambda **kwargs: calls.append(kwargs)
+    )
+    await engine.stop(local_only=True)
+    assert calls == [{"local_only": True}]
+    assert engine._client is None
+    assert not engine._loaded

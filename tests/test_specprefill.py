@@ -1,6 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0
 """Tests for SpecPrefill (attention-based sparse prefill)."""
 
+import logging
+
 import pytest
 
 try:
@@ -138,6 +140,15 @@ class TestManualRoPE:
         positions = mx.arange(L)
         result = manual_rope(x, positions, dims=head_dim)
         assert result.shape == x.shape
+
+    def test_scale_multiplies_positions_like_fast_rope(self):
+        from omlx.patches.specprefill import manual_rope
+
+        # Linear RoPE scaling, e.g. Gemma 3 global layers.
+        x = mx.random.normal((1, 4, 8, 64))
+        ref = mx.fast.rope(x, 64, traditional=False, base=1e6, scale=0.125, offset=1000)
+        out = manual_rope(x, mx.arange(1000, 1008), dims=64, base=1e6, scale=0.125)
+        assert mx.allclose(out, ref, atol=1e-4)
 
     def test_non_contiguous_positions(self):
         from omlx.patches.specprefill import manual_rope
@@ -906,3 +917,191 @@ class TestTargetPrefillLeftoverCleanup:
         # Entry cleanup must restore the genuine rope before prefill runs
         assert seen["rope"] is genuine
         assert layer.self_attn.rope is genuine
+
+
+class TestLogicalCacheOffset:
+    @staticmethod
+    def _model(kinds):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(
+            layers=[
+                (
+                    SimpleNamespace(self_attn=object())
+                    if kind == "a"
+                    else SimpleNamespace()
+                )
+                for kind in kinds
+            ]
+        )
+
+    @pytest.mark.parametrize("populated", [False, True])
+    def test_hybrid_and_composite_caches(self, populated):
+        from mlx_lm.models.cache import ArraysCache, CacheList, KVCache
+
+        from omlx.patches.specprefill import _logical_cache_offset
+
+        recurrent, kv = ArraysCache(1), KVCache()
+        if populated:
+            recurrent[0] = mx.ones((1, 2, 4))
+            kv.update_and_fetch(mx.zeros((1, 2, 12, 8)), mx.zeros((1, 2, 12, 8)))
+        expected = 12 if populated else 0
+        assert _logical_cache_offset(self._model("a"), [kv]) == expected
+        assert _logical_cache_offset(self._model("ra"), [recurrent, kv]) == expected
+        assert (
+            _logical_cache_offset(self._model("a"), [CacheList(kv, recurrent)])
+            == expected
+        )
+
+    @pytest.mark.parametrize("offsets", [(40, 40), (40, 64)])
+    def test_unbounded_offset_disagreement_is_logged(self, offsets, caplog):
+        from mlx_lm.models.cache import KVCache
+
+        from omlx.patches.specprefill import _logical_cache_offset
+
+        caches = [KVCache(), KVCache()]
+        for cache, offset in zip(caches, offsets):
+            cache.offset = offset
+        with caplog.at_level(logging.WARNING, logger="omlx.patches.specprefill"):
+            assert _logical_cache_offset(self._model("aa"), caches) == 40
+        assert bool(caplog.records) == (offsets[0] != offsets[1])
+
+    def test_bounded_offsets_are_used_only_without_unbounded_layers(self):
+        from mlx_lm.models.cache import KVCache, RotatingKVCache
+
+        from omlx.patches.specprefill import _logical_cache_offset
+
+        kv = KVCache()
+        kv.offset = 40
+        rotating = RotatingKVCache(max_size=8)
+        rotating.offset = 64
+        assert _logical_cache_offset(self._model("aa"), [kv, rotating]) == 40
+        assert _logical_cache_offset(self._model("a"), [rotating]) == 64
+
+    @pytest.mark.parametrize("probe", ["empty", "populated", "missing", "raises"])
+    def test_missing_offset_requires_proven_empty_cache(self, probe):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        from omlx.patches.specprefill import (
+            IndeterminateCacheOffsetError,
+            _logical_cache_offset,
+        )
+
+        cache = SimpleNamespace()
+        if probe == "raises":
+            cache.empty = Mock(side_effect=RuntimeError("unreadable"))
+        elif probe != "missing":
+            cache.empty = lambda: probe == "empty"
+        if probe == "empty":
+            assert _logical_cache_offset(self._model("a"), [cache]) == 0
+        else:
+            with pytest.raises(IndeterminateCacheOffsetError):
+                _logical_cache_offset(self._model("a"), [cache])
+
+
+class TestUndoLookahead:
+
+    @staticmethod
+    def _kv(n, seed):
+        return mx.random.normal((1, 2, n, 4), key=mx.random.key(seed))
+
+    @staticmethod
+    def _snapshot(leaf):
+        from mlx.utils import tree_flatten
+
+        from omlx.patches.specprefill import _is_sliceable_kv
+
+        if _is_sliceable_kv(leaf):
+            arrays = [
+                leaf.keys[..., : leaf.offset, :],
+                leaf.values[..., : leaf.offset, :],
+            ]
+            return [a.tolist() for a in arrays], leaf.offset
+        return [
+            (name, v.tolist() if isinstance(v, mx.array) else v)
+            for name, v in tree_flatten(leaf.state)
+        ], {k: v for k, v in vars(leaf).items() if isinstance(v, int)}
+
+    def test_round_trip_restores_every_leaf(self):
+        from mlx_lm.models.cache import (
+            ArraysCache,
+            CacheList,
+            KVCache,
+            RotatingKVCache,
+        )
+
+        from omlx.cache.type_handlers import SizedArraysCache
+        from omlx.patches.specprefill import (
+            _cache_leaves,
+            _hold_leaf_state,
+            _is_sliceable_kv,
+            _undo_lookahead,
+        )
+
+        recurrent = ArraysCache(2)
+        recurrent[0] = mx.ones((1, 3))
+        recurrent[1] = mx.ones((1, 3)) * 2
+        restored = SizedArraysCache(ArraysCache(2), token_count=12)
+        restored[0] = mx.ones((1, 3)) * 3
+        restored[1] = mx.ones((1, 3)) * 4
+        window = RotatingKVCache(max_size=8)
+        window.update_and_fetch(self._kv(11, 1), self._kv(11, 2))
+        window.update_and_fetch(self._kv(1, 7), self._kv(1, 8))
+        nested_kv = KVCache()
+        nested_kv.update_and_fetch(self._kv(12, 3), self._kv(12, 4))
+        plain_kv = KVCache()
+        plain_kv.update_and_fetch(self._kv(12, 5), self._kv(12, 6))
+        cache = [
+            CacheList(recurrent, window),
+            CacheList(nested_kv),
+            plain_kv,
+            restored,
+        ]
+
+        leaves = _cache_leaves(cache)
+        assert leaves == [recurrent, window, nested_kv, plain_kv, restored]
+        before = [self._snapshot(leaf) for leaf in leaves]
+        held = [
+            None if _is_sliceable_kv(leaf) else _hold_leaf_state(leaf)
+            for leaf in leaves
+        ]
+
+        for step in range(3):
+            recurrent[0] = recurrent[0] + 1
+            restored[0] = restored[0] + 1
+            for leaf in (window, nested_kv, plain_kv):
+                leaf.update_and_fetch(self._kv(1, 10 + step), self._kv(1, 20 + step))
+
+        _undo_lookahead(leaves, held, pre_lookahead_offset=12)
+
+        assert [self._snapshot(leaf) for leaf in leaves] == before
+        assert cache[0].caches[1] is window
+        assert restored[0].tolist() == [[3.0, 3.0, 3.0]]
+        assert window._idx == before[1][1]["_idx"]
+
+
+class TestSlidingWindowTailMerge:
+    def test_tail_merge_excludes_kickoff(self):
+        from types import SimpleNamespace
+
+        from mlx_lm.models.cache import KVCache, RotatingKVCache
+
+        from omlx.patches.specprefill import sparse_prefill
+
+        rope = SimpleNamespace(dims=8, base=10000.0, scale=1.0)
+        processed = []
+
+        class Model:
+            layers = [SimpleNamespace(self_attn=SimpleNamespace(rope=rope))]
+
+            def __call__(self, tokens, cache):
+                processed.append(int(tokens.shape[-1]))
+                return mx.zeros((1, tokens.shape[-1], 1))
+
+        cache = [RotatingKVCache(max_size=4), KVCache()]
+        sparse_prefill(
+            Model(), mx.arange(10), mx.array([0, 1, 2, 5]), cache, kickoff_index=9
+        )
+        # BatchGenerator processes kickoff 9, so the tail adds only 6, 7, 8.
+        assert sum(processed) == 7
